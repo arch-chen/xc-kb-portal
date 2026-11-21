@@ -37,6 +37,7 @@ require BASE_PATH . '/app/pay/gateway.php';
 require BASE_PATH . '/app/pay/epay.php';
 require BASE_PATH . '/app/pay/orders.php';
 require BASE_PATH . '/app/pay/ledger.php';
+require BASE_PATH . '/app/site.php';
 require BASE_PATH . '/app/nav.php';
 // install.php 在引导之前就要用这些部署文案，所以这里用 require_once 防止重复声明
 require_once BASE_PATH . '/app/deploy.php';
@@ -71,9 +72,13 @@ if (PHP_SAPI !== 'cli' && !headers_sent()) {
 
 /* ---------------- 基础助手 ---------------- */
 
+/**
+ * 站点名称（2.4.0 起统一走 site_info()，后台「网站基础信息」可改）。
+ * 保留这个函数名是因为 20+ 处调用点、以及外部接口都用它。
+ */
 function app_name(): string
 {
-    return (string)(setting_get('site_name') ?: (cfg()['app']['name'] ?? 'XC知识库系统'));
+    return (string)site_info('name');
 }
 
 /** 站点根路径，例如 /kb 或 '' */

@@ -1139,15 +1139,21 @@ function ctrl_admin_system(): void
     $err = '';
     if (is_post()) {
         csrf_check();
+        /* ---- 网站基础信息（2.4.0）：站点名、副标题、logo、页脚、备案号等 ---- */
+        if (($_POST['action'] ?? '') === 'site_info') {
+            $r = site_save($_POST, $_FILES);
+            if ($r['ok']) {
+                audit('update_site_info', 'name=' . app_name() . ' logo=' . (site_info('logo') !== '' ? 'yes' : 'no'));
+                flash($r['message']);
+                redirect(u('admin_system'));
+            }
+            $err = $r['error'];
+        }
         if (($_POST['action'] ?? '') === 'settings') {
             setting_set('allow_register', post('allow_register') === '1' ? '1' : '0');
             setting_set('mcp_enabled', post('mcp_enabled') === '1' ? '1' : '0');
             $n = (int)post('register_per_hour', '5');
             setting_set('register_per_hour', (string)max(1, min(100, $n)));
-            $site = post('site_name');
-            if ($site !== '') {
-                setting_set('site_name', mb_substr($site, 0, 60, 'UTF-8'));
-            }
             audit('update_settings', 'allow_register=' . setting_get('allow_register') . ' per_hour=' . setting_get('register_per_hour'));
             flash('设置已保存');
             redirect(u('admin_system'));
@@ -1224,6 +1230,7 @@ function ctrl_admin_system(): void
         'title' => '系统与升级',
         'ver' => $verJson,
         'msg' => $msg, 'err' => $err,
+        'site' => site_info(),
         'ghCheck' => $ghCheck,
         'ghResult' => $ghResult,
         'ghRepo' => gh_repo(),
@@ -1813,6 +1820,12 @@ function storage_job_public(array $job): array
 function ctrl_file(): void
 {
     file_send();
+}
+
+/** 站点 logo / favicon 输出（2.4.0）。免登录：登录页、注册页都要显示 */
+function ctrl_branding(): void
+{
+    site_brand_send(get_q('f'));
 }
 
 /** 后台下载 / 预览附件（管理后台 → 文件存储）：require_admin 已打后台标记，不在前台口径里 */

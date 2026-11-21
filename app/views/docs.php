@@ -67,6 +67,7 @@ $ep = function (string $method, string $path, string $desc, string $anchor, arra
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e(page_title('开发文档')) ?></title>
 <meta name="description" content="<?= e(app_name()) ?> 对外开放接口文档：REST API、MCP、OpenAPI，供其他 Agent 与平台接入。">
+<?= site_favicon_tag() ?>
 <link rel="stylesheet" href="<?= e(asset('app.css')) ?>?v=<?= e(asset_ver('app.css')) ?>">
 <link rel="stylesheet" href="<?= e(asset('docs.css')) ?>?v=<?= e(asset_ver('docs.css')) ?>">
 <script>
@@ -78,7 +79,7 @@ $ep = function (string $method, string $path, string $desc, string $anchor, arra
 <header class="docs-top">
   <div class="docs-top-in">
     <a class="brand" href="<?= e(u()) ?>">
-      <span class="brand-mark">知</span>
+      <?= site_brand_mark() ?>
       <span><?= e(app_name()) ?></span>
     </a>
     <span class="docs-top-tag">开发文档</span>
@@ -762,6 +763,7 @@ while True:
         <table class="table">
           <thead><tr><th style="width:90px">版本</th><th>变更</th></tr></thead>
           <tbody>
+            <tr><td><code>2.4.0</code></td><td>站点身份可自定义 + 侧栏订阅入口。<b>① 网站基础信息</b>（管理后台 → 系统与升级 → 网站基础信息）：以前只能改「站点名称」一项，副标题、图标、页脚、备案号全散在模板里硬编码（登录页甚至写死「XC知识库系统」，改了站点名压根不变）。现在一处可改 12 项：站点名称、副标题、站点简介、站点图标（logo）、浏览器小图标（favicon）、登录页公告、页脚版权、ICP 备案号 + 链接、公安备案号 + 链接、联系方式。保存后全站立即生效——左侧栏品牌、浏览器标签、登录/注册/找回密码页、开发文档页、支付结果页、所有外发邮件里的站点名都跟着变。<b>图标</b>可上传（png/jpg/gif/webp，favicon 另加 ico）或填外链；存在 <code>storage/branding/</code>、经 <code>index.php?r=branding</code> 输出（<code>storage/</code> 在 nginx 上被 deny，直链会 404），<b>明确不收 svg</b>——svg 直链打开会执行脚本。没设图标时仍取站点名首字，老站升级外观不变（页脚各项全空则不渲染）。<b>② 内页标题修复</b>：除首页外，内页 <code>&lt;title&gt;</code> 以前只有「账单」「分组」这类页面名、不带站点名，现在统一为「页面名 · 站点名」。<b>③ 侧栏订阅入口</b>：左侧下方新增「订阅会员」（带「升级」角标，点进账单挑套餐）；<b>已订阅则按钮自动隐藏</b>，原位改成「会员用户 + 套餐名」的会员标识，悬停看到到期日，点了进账单看详情。判断标准是「当前有生效中的月付套餐」，所以套餐到期、被退款作废、只买过积分包、或 AI 模块整体关闭，都按未订阅处理（不显示假会员）。地址与 API 全部不变。</td></tr>
             <tr><td><code>2.3.1</code></td><td>修 2.3.0 权限收紧带来的两个回归 + 七牛上传域名问题。<b>① AI 查不到知识库（重要）</b>：<code>kb_groups</code> 以前只返回「有写权限」的分组，只有读授权的账号（别人授权给你、或唯一的公共库）拿到空列表，模型据此断言「没有任何知识库」直接放弃检索——库里明明有内容。<b>现在 <code>kb_groups</code> 列出全部可检索分组</b>（<code>writable=false</code> 即只读），并带上分组条数与总条数；提示词也同步改掉「只列有写权限的分组」这句误导。搜不到时不再说「没有可读的分组」，而是说明「在 N 个分组 / M 条内容里都没命中，换个更短的关键词」。<b>② 整句提问检索落空</b>：中文按二字组覆盖率算分，把「帮我看下知识库里关于积分套餐的内容」整句丢进去会被废话词稀释成 0 命中。<b>新增检索词归一化</b>（<code>agent_search_terms()</code>）：自动剥掉提问话术与虚词、按段取中文实词串，先按原句搜、空了再用拆词结果搜一轮，AI 工作台与 AI 助手共用；提示词也明确要求 query 只给 2~6 个实词、没命中就换同义词再试。<b>③ 七牛「测试连接提示连接失败」</b>：真实返回是 <code>connect refused, please use up-z2.qiniup.com, bucket is in z2</code>——七牛已告知正确上传域名，只是空间不在默认区域。<b>现在会自动从报错里解析出正确域名并重试</b>，成功即写回配置（<code>auto_host</code>，后续真实上传不再走错）；解析不到时才报错，且文案说清「域名与空间区域不匹配 + 两种改法 + 原始返回」，不再只丢一句「连接失败」。地址与 API 全部不变。</td></tr>
             <tr><td><code>2.3.0</code></td><td>管理员身份拆成<b>「前台 / 后台」两套</b>：管理系统全站的功能与页面只从左侧「管理后台」进，回到用户页面（首页 / 分组 / 条目 / 搜索 / AI 工作台 / AI 助手 / 文件）后，管理员与普通用户<b>完全同权同价</b>。<b>① 权限</b>：前台只认「自己建的分组 + 被授权的分组」，不再因为 <code>role=admin</code> 放出全站分组与别人的知识库；后台 <code>?r=admin*</code> 才全通（<code>require_admin()</code> 打上下文标记，<code>perm_root()</code> 才成立）。<b>② 计费</b>：AI 不再给管理员免单——前台余额不足照样被门禁卡片拦下，同一套积分 / 套餐约束；要给自己加积分或开套餐去「管理后台 → AI 与套餐」。<b>③ 后台操作不再借前台路由</b>：新增 <code>admin_entry_edit</code>（内容编辑 / 新建）、<code>admin_entry_view</code>（内容查看）、<code>admin_file</code>（文件预览下载），后台的保存 / 删除 / 查看都留在后台。<b>④ 共享分组补成员关系</b>：后台新建的公共分组（<code>owner_id=0</code>）自动把创建者记为成员，迁移 <code>2.3.0</code> 给现有共享分组补上管理员授权，避免升级后公共库「谁都看不见」。<b>⑤</b> 左侧「我的分组」固定按前台口径，后台页面不会突然列出全站分组。<b>⑥</b> 提示词与界面同步：AI 不再声称管理员能看全站，工作台底部、账户页角色、后台概览都写明前台同权。地址与 API 全部不变。</td></tr>
             <tr><td><code>2.2.5</code></td><td>AI 会话新增 <b>「计费 / 模型门禁」</b>：回答前先判断所选模型属于哪种模式。<b>① 积分扣除（系统模型）</b>：先看余额，不足时不再白跑一次调用，直接在<b>会话窗口内自动显示引导卡片</b>，带「去充值 / 买套餐」「接入自定义模型」入口，已有自定义模型还能一键切换过去；<b>② 自定义接入模型</b>：先校验月付套餐与接口配置（缺地址 / 模型名 / API Key 都写明），接口连不通时把域名解析、TCP、TLS、超时、401 / 429 / 404 等<b>具体报错原因</b>翻成人话，并给「去我的模型测试连接」「切回系统模型」入口。进页面、切换模型、每轮发送前都会重新判断，卡片随状态自动出现 / 消失；拦截时<b>不预扣、不调用、不记失败日志</b>，失败调用仍全额退积分。AI 工作台与 AI 助手（对话 / 优化答案 / 文本转 QA）统一生效，引导卡片落库，刷新后仍在且不会自动续跑。另修复「会话记住的模型被删除后默认选中回退」。离线上传 zip 入口保留，地址与 API 全部不变。</td></tr>
@@ -800,6 +802,7 @@ while True:
       </p>
     </section>
 
+    <?= site_footer_html() ?>
   </main>
 </div>
 

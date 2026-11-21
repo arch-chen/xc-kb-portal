@@ -61,6 +61,7 @@ $routes = [
     'admin_pay'    => 'ctrl_admin_pay',
     'f'            => 'ctrl_file',
     'admin_file'   => 'ctrl_admin_file',
+    'branding'     => 'ctrl_branding',
 ];
 
 // 兼容 /g/wayfair、/entry/12 这类伪静态地址（.htaccess 会传 r 参数）

@@ -5,6 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e(page_title('注册')) ?></title>
+<?= site_favicon_tag() ?>
 <link rel="stylesheet" href="<?= e(asset('app.css')) ?>?v=<?= e(asset_ver('app.css')) ?>">
 <script>
 (function(){try{var t=localStorage.getItem('kb-theme')||'system';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
@@ -14,7 +15,7 @@
   <div class="login-wrap">
     <div class="login-card">
       <div class="login-brand">
-        <span class="brand-mark">知</span>
+        <?= site_brand_mark() ?>
         <div>
           <div class="login-title"><?= e(app_name()) ?></div>
           <div class="login-sub">创建账号</div>
@@ -85,6 +86,7 @@
         <button type="button" class="link-btn" id="themeBtn">切换主题</button>
       </div>
     </div>
+    <?= site_footer_html() ?>
   </div>
 <script src="<?= e(asset('app.js')) ?>?v=<?= e(asset_ver('app.js')) ?>"></script>
 </body>

@@ -92,6 +92,37 @@ function nav_bill_tabs(string $cur): string
 }
 
 /**
+ * 侧栏底部的「订阅 / 会员」入口（2.4.0）
+ *
+ * 没订阅 → 显示「订阅会员」按钮，点进账单页挑套餐；
+ * 已订阅 → 按钮自动消失，改成显示「会员用户 · 套餐名」的身份标识（可点进账单看详情）。
+ * 套餐开关（AI 关闭）或时间到期都算未订阅，所以这里一律用 ai_active_plan() 判断，
+ * 不看 user_plans 的 status 字段——那只是「没被退款作废」。
+ */
+function nav_subscribe_item(?array $u): string
+{
+    if (!$u || !ai_on()) {
+        return '';
+    }
+    $uid = (int)$u['id'];
+    $plan = ai_active_plan($uid);
+    if ($plan) {
+        $name = (string)($plan['plan_name'] ?? '');
+        $exp = (string)($plan['expires_at'] ?? '');
+        $tail = $exp !== '' ? date('n月j日', (int)strtotime($exp)) . '到期' : '长期有效';
+        return '<a class="side-item side-member" href="' . e(u('recharge')) . '"'
+            . ' title="会员用户：' . e($name) . '，' . e($tail) . '">'
+            . '<span class="ico">★</span>'
+            . '<span class="side-item-text">会员用户</span>'
+            . '<span class="side-member-tag">' . e($name !== '' ? $name : '已订阅') . '</span>'
+            . '</a>';
+    }
+    return '<a class="side-item side-sub" href="' . e(u('recharge')) . '" title="开通月付套餐，解锁更多每日次数与自带模型">'
+        . '<span class="ico">✦</span><span class="side-item-text">订阅会员</span>'
+        . '<span class="side-sub-tag">升级</span></a>';
+}
+
+/**
  * 全站常驻的「AI 工作台」会话侧栏（2.2.2）。
  *
  * 首页 / 分组页 / 工作台页左栏都同时显示「我的分组」和这块对话列表，

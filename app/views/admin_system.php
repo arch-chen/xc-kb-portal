@@ -1,4 +1,4 @@
-<?php /** @var array $ver @var string $msg @var string $err @var array $history @var string $php @var string $driver */ ?>
+<?php /** @var array $ver @var string $msg @var string $err @var array $history @var string $php @var string $driver @var array $site */ ?>
 <section class="page-head">
   <div>
     <h1 class="page-title">系统与升级</h1>
@@ -206,6 +206,122 @@ $nginxFull = nginx_snippet();
 </section>
 
 <section class="panel">
+  <h2 class="panel-title">网站基础信息</h2>
+  <div class="hint">
+    这里改的是「站点身份」：名称、副标题、图标、页脚、备案号、联系方式。
+    保存后全站立即生效——包括左侧栏品牌、浏览器标签页标题、登录/注册/找回密码页、
+    开发文档页、支付结果页和所有外发邮件里的站点名。
+  </div>
+  <form method="post" action="<?= e(u('admin_system')) ?>" class="form" enctype="multipart/form-data">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="site_info">
+
+    <div class="form row-form">
+      <label>站点名称<span class="field-hint">显示在左侧栏、标签页、邮件里，最多 60 字</span>
+        <input type="text" name="site_name" value="<?= e((string)$site['name']) ?>" maxlength="60" required>
+      </label>
+      <label>副标题<span class="field-hint">登录 / 注册 / 找回密码页名称下面那一行</span>
+        <input type="text" name="site_subtitle" value="<?= e((string)$site['subtitle']) ?>"
+               maxlength="120" placeholder="例如：内部知识库 · 仅限团队使用">
+      </label>
+    </div>
+
+    <label>站点简介<span class="field-hint">一句话说明这个站是干什么的，出现在对外接口与分享摘要里</span>
+      <input type="text" name="site_desc" value="<?= e((string)$site['desc']) ?>"
+             maxlength="300" placeholder="例如：Wayfair 运营问答与文档，支持 REST / MCP / OpenAPI 接入">
+    </label>
+
+    <div class="settings-sep"></div>
+
+    <div class="form row-form">
+      <label>站点图标（logo）<span class="field-hint">显示在左侧栏和登录页，建议正方形 1:1，≤512 KB</span>
+        <input type="file" name="logo_file" accept="image/png,image/jpeg,image/gif,image/webp">
+      </label>
+      <label>或者填图片地址<span class="field-hint">不想上传就填外链或站内路径</span>
+        <input type="text" name="logo_url" value="<?= e(site_brand_is_file((string)$site['logo']) ? '' : (string)$site['logo']) ?>"
+               maxlength="300" placeholder="https://… 或 /static/logo.png">
+      </label>
+    </div>
+    <?php if (site_brand_src('logo') !== ''): ?>
+      <div class="brand-preview">
+        <span class="brand-preview-img"><?= site_brand_mark() ?></span>
+        <span class="tiny muted">当前图标<?= site_brand_is_file((string)$site['logo']) ? '（已上传）' : '（外链）' ?></span>
+        <label class="check-line tiny"><input type="checkbox" name="logo_clear" value="1"> 清除，回到「取站点名首字」</label>
+      </div>
+    <?php else: ?>
+      <div class="hint">还没设图标，左侧栏显示站点名的第一个字。</div>
+    <?php endif; ?>
+
+    <div class="form row-form">
+      <label>浏览器小图标（favicon）<span class="field-hint">标签页上的小图标，png / ico，≤256 KB</span>
+        <input type="file" name="favicon_file" accept="image/png,image/x-icon,image/jpeg,image/gif,image/webp">
+      </label>
+      <label>或者填图片地址
+        <input type="text" name="favicon_url" value="<?= e(site_brand_is_file((string)$site['favicon']) ? '' : (string)$site['favicon']) ?>"
+               maxlength="300" placeholder="/favicon.ico">
+      </label>
+    </div>
+    <?php if (site_brand_src('favicon') !== ''): ?>
+      <div class="brand-preview">
+        <img class="brand-preview-fav" src="<?= e(site_brand_src('favicon')) ?>" alt="">
+        <span class="tiny muted">当前小图标</span>
+        <label class="check-line tiny"><input type="checkbox" name="favicon_clear" value="1"> 清除</label>
+      </div>
+    <?php endif; ?>
+
+    <div class="settings-sep"></div>
+
+    <label>登录页公告<span class="field-hint">留空不显示。只在登录页出现，适合放「系统维护」「数据仅限内部」这类提示</span>
+      <textarea name="site_announce" rows="2" maxlength="300"
+                placeholder="例如：本站内容仅限团队内部使用，请勿外传。"><?= e((string)$site['announce']) ?></textarea>
+    </label>
+
+    <label>页脚版权文字<span class="field-hint">留空则不显示页脚。支持换行</span>
+      <textarea name="site_footer" rows="2" maxlength="300"
+                placeholder="例如：© 2026 Wayfair 运营组 · 内部资料"><?= e((string)$site['footer']) ?></textarea>
+    </label>
+
+    <div class="form row-form">
+      <label>ICP 备案号
+        <input type="text" name="site_icp" value="<?= e((string)$site['icp']) ?>"
+               maxlength="60" placeholder="例如：粤ICP备12345678号-1">
+      </label>
+      <label>备案链接
+        <input type="text" name="site_icp_url" value="<?= e((string)$site['icp_url']) ?>"
+               maxlength="300" placeholder="https://beian.miit.gov.cn/">
+      </label>
+    </div>
+
+    <div class="form row-form">
+      <label>公安备案号
+        <input type="text" name="site_police" value="<?= e((string)$site['police']) ?>"
+               maxlength="60" placeholder="例如：粤公网安备 44030502001234号">
+      </label>
+      <label>公安备案链接
+        <input type="text" name="site_police_url" value="<?= e((string)$site['police_url']) ?>"
+               maxlength="300" placeholder="https://beian.mps.gov.cn/#/query/webSearch">
+      </label>
+    </div>
+
+    <label>联系方式<span class="field-hint">显示在页脚，一行文字，例如邮箱或群号</span>
+      <input type="text" name="site_contact" value="<?= e((string)$site['contact']) ?>"
+             maxlength="200" placeholder="例如：维护人 alice@example.com">
+    </label>
+
+    <div class="hint">
+      图标存在 <code>storage/branding/</code>，通过 <code>index.php?r=branding</code> 输出，
+      不经 Web 服务器直链——因为 <code>storage/</code> 在 nginx/Apache 上是被拒绝访问的。
+      只接受 png / jpg / gif / webp（favicon 另加 ico），<b>不收 svg</b>：svg 直链打开会执行脚本。
+    </div>
+
+    <div class="form-actions">
+      <button class="btn primary" type="submit">保存站点信息</button>
+      <a class="btn" href="<?= e(u()) ?>" target="_blank" rel="noopener">看首页效果</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
   <h2 class="panel-title">注册与访问</h2>
   <form method="post" action="<?= e(u('admin_system')) ?>" class="form">
     <?= csrf_field() ?>
@@ -221,12 +337,10 @@ $nginxFull = nginx_snippet();
     <label>同一 IP 每小时最多注册
       <input type="number" name="register_per_hour" min="1" max="100" value="<?= (int)$perHour ?>" class="tiny-input">
     </label>
-    <label>站点名称
-      <input type="text" name="site_name" value="<?= e(app_name()) ?>" maxlength="60">
-    </label>
     <div class="hint">
       当前共 <b><?= (int)$userCount ?></b> 个账号、<b><?= (int)$spaceCount ?></b> 个私有空间。
       全站每小时上限为 <?= register_hourly_cap() ?> 个新账号（按上限的 5 倍自动算，防止被批量注册）。
+      站点名称已移到上面的「网站基础信息」。
     </div>
     <div class="settings-sep"></div>
     <label class="check-line">

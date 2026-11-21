@@ -16,7 +16,8 @@ $isAdmin = $u ? is_admin($u) : false;
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><?= e($title ?? app_name()) ?></title>
+<title><?= e(page_title((string)($title ?? ''))) ?></title>
+<?= site_favicon_tag() ?>
 <link rel="stylesheet" href="<?= e(asset('app.css')) ?>?v=<?= e(asset_ver('app.css')) ?>">
 <script>
 (function () {
@@ -31,7 +32,7 @@ $isAdmin = $u ? is_admin($u) : false;
 <div class="shell">
   <aside class="sidebar" id="sidebar">
     <a class="brand" href="<?= e(u()) ?>">
-      <span class="brand-mark">知</span>
+      <?= site_brand_mark() ?>
       <span class="brand-text"><?= e(app_name()) ?></span>
     </a>
 
@@ -64,6 +65,7 @@ $isAdmin = $u ? is_admin($u) : false;
     <?= $u ? nav_agent_side((int)$u['id'], (int)($GLOBALS['agent_run_id'] ?? 0)) : '' ?>
 
     <div class="side-foot">
+      <?= nav_subscribe_item($u) ?>
       <a class="side-item <?= $route === 'group_new' ? 'active' : '' ?>" href="<?= e(u('group_new')) ?>"><span class="ico">＋</span>新建分组</a>
       <?php if (ai_on()): ?>
         <a class="side-item <?= $route === 'agent' ? 'active' : '' ?>" href="<?= e(u('agent')) ?>"><span class="ico">⌘</span>AI 工作台</a>
@@ -95,6 +97,8 @@ $isAdmin = $u ? is_admin($u) : false;
     <?= nav_subnav($route) ?>
 
     <?= $content ?>
+
+    <?= site_footer_html() ?>
   </main>
 </div>
 <script src="<?= e(asset('app.js')) ?>?v=<?= e(asset_ver('app.js')) ?>"></script>

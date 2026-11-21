@@ -52,6 +52,9 @@ if ($zip->open($out, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
 $zip->addFromString('storage/.htaccess', "# 禁止外部访问\n<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n</IfModule>\n");
 $zip->addFromString('storage/backups/.gitkeep', '');
 $zip->addFromString('storage/tmp/.gitkeep', '');
+// 2.4.0：站点图标目录。预建并带 .htaccess，免得用户没配 nginx 规则时 logo 能被直链下载
+$zip->addFromString('storage/branding/.htaccess', "# 禁止外部访问（图标经 index.php?r=branding 输出）\n<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n</IfModule>\n");
+$zip->addFromString('storage/branding/.gitkeep', '');
 
 $count = 0;
 $add = function (string $abs, string $rel) use ($zip, &$count, &$add, $skipFiles, $skipDirs) {
