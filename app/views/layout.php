@@ -7,8 +7,9 @@ $route = get_q('r');
 $f = flash();
 $section = $u ? nav_section($route) : '';
 $isAdmin = $u ? is_admin($u) : false;
-// 工作台会把会话列表塞进来（见 views/agent.php），用来替换左侧的分组列表，
-// 这样左栏一列到底不会有空白，主区只放对话本身。
+// 左栏常驻「我的分组」；AI 工作台会额外把「对话列表 + 新对话」塞进来（见 views/agent.php），
+// 两块并列在同一个侧栏里，不再互相替换。主区内容仍按路由各自渲染，
+// 首页与 AI 工作台依旧是两个独立页面。
 $sidePanel = (string)($GLOBALS['side_panel'] ?? '');
 ?>
 <!DOCTYPE html>
@@ -40,9 +41,6 @@ $sidePanel = (string)($GLOBALS['side_panel'] ?? '');
       <input type="search" name="q" placeholder="搜索…" value="<?= e(get_q('q')) ?>">
     </form>
 
-    <?php if ($sidePanel !== ''): ?>
-      <?= $sidePanel ?>
-    <?php else: ?>
     <div class="side-section">
       <div class="side-title">我的分组</div>
       <nav class="side-nav">
@@ -70,6 +68,9 @@ $sidePanel = (string)($GLOBALS['side_panel'] ?? '');
         <?php endforeach; ?>
       </nav>
     </div>
+
+    <?php if ($sidePanel !== ''): ?>
+      <?= $sidePanel ?>
     <?php endif; ?>
 
     <div class="side-foot">

@@ -2,9 +2,9 @@
     "schema": 1,
     "repo": "arch-chen/xc-kb-portal",
     "branch": "main",
-    "generated_at": "2026-11-21T05:01:22+00:00",
-    "current_src": "2.2.0",
-    "latest": "2.2.0",
+    "generated_at": "2026-11-21T05:59:03+00:00",
+    "current_src": "2.2.1",
+    "latest": "2.2.1",
     "releases": [
         {
             "version": "1.1.0",
@@ -221,6 +221,15 @@
             "zip": "update-2.2.0.zip",
             "sha256": "d4ec88a7749ed421168ddf78e67bb28d6e2062c3c3306236191013e8f4a3751f",
             "size": 379071
+        },
+        {
+            "version": "2.2.1",
+            "min_version": "2.2.0",
+            "released": "2026-11-21",
+            "notes": "左侧菜单栏合并：AI 工作台的「对话列表 + 新对话」与「我的分组」并列在同一个侧栏，不再互相替换；中间主区仍按页面区分，首页与 AI 工作台依旧是两个独立页面。本地离线上传更新包依旧保留。从本版起发版直接推 GitHub 仓库，后台点「检查更新 → 立即更新」即可在线升级。地址与 API 全部不变",
+            "zip": "update-2.2.1.zip",
+            "sha256": "fdf01e7057a28c6b4fb6cb722fd11ea8f3893418b98df60b66a6ace523f5b23e",
+            "size": 379562
         }
     ]
 }
