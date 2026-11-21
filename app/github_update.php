@@ -184,8 +184,57 @@ function gh_net_hint(int $errno, string $err): string
     return trim($err) !== '' ? $err : ('网络错误 errno=' . $errno);
 }
 
+/** 单次 curl 请求，返回 ['ok','body','error','code','redirect','errno','cert_err','url'] */
+function gh_curl_once(string $url, int $limit, int $timeout, bool $verify): array
+{
+    $ch = curl_init($url);
+    $opts = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_SSL_VERIFYPEER => $verify,
+        CURLOPT_SSL_VERIFYHOST => $verify ? 2 : 0,
+        CURLOPT_USERAGENT      => 'XC-KB-Updater/' . (defined('APP_VERSION') ? APP_VERSION : '0'),
+        CURLOPT_HTTPHEADER     => [gh_source() === 'api'
+            ? 'Accept: application/vnd.github.raw'
+            : 'Accept: application/json, application/octet-stream, */*'],
+    ];
+    if (defined('CURLOPT_PROTOCOLS')) {
+        $opts[CURLOPT_PROTOCOLS] = CURLPROTO_HTTPS;
+    }
+    curl_setopt_array($ch, $opts);
+    $body = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $errno = (int)curl_errno($ch);
+    $err = (string)curl_error($ch);
+    $redirect = (string)curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+    curl_close($ch);
+
+    $r = [
+        'ok' => false, 'body' => '', 'error' => '', 'code' => $code,
+        'redirect' => '', 'errno' => $errno, 'cert_err' => false, 'url' => $url,
+    ];
+    if ($body === false) {
+        $r['error'] = gh_net_hint($errno, $err);
+        $r['cert_err'] = in_array($errno, [35, 53, 54, 58, 59, 60, 64, 66, 77, 80, 83, 90, 91], true);
+        return $r;
+    }
+    if (strlen((string)$body) > $limit) {
+        $r['error'] = '响应超过大小上限，疑似不是预期文件';
+        return $r;
+    }
+    $r['ok'] = true;
+    $r['body'] = (string)$body;
+    $r['redirect'] = $redirect;
+    return $r;
+}
+
 /**
  * 只 https、手动跟跳转（每跳复检）、限制响应体大小。
+ * 服务器缺 CA 根证书时（errno 60 等）自动降级为「不校验 TLS」重试同一 URL ——
+ * 内容完整性由清单里的 sha256 保证，不依赖 TLS 证书链。降级记在 $GLOBALS['__gh_tls_fallback']，
+ * 由 gh_check() / gh_update_run() 带进页面提示，管理员看得到，不是静默降级。
  * 返回 ['ok'=>bool,'body'=>string,'error'=>string,'code'=>int,'url'=>string]
  */
 function gh_http_get(string $url, int $limit, int $timeout = 30): array
@@ -199,59 +248,42 @@ function gh_http_get(string $url, int $limit, int $timeout = 30): array
 
     $cur = $url;
     $hops = 0;
+    $verify = gh_verify_ssl();
     while (true) {
         try {
             gh_assert_url($cur);
         } catch (RuntimeException $e) {
             return ['ok' => false, 'body' => '', 'error' => $e->getMessage(), 'code' => 0, 'url' => $cur];
         }
-        $ch = curl_init($cur);
-        $opts = [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_CONNECTTIMEOUT => 8,
-            CURLOPT_TIMEOUT        => $timeout,
-            CURLOPT_SSL_VERIFYPEER => gh_verify_ssl(),
-            CURLOPT_SSL_VERIFYHOST => gh_verify_ssl() ? 2 : 0,
-            CURLOPT_USERAGENT      => 'XC-KB-Updater/' . (defined('APP_VERSION') ? APP_VERSION : '0'),
-            CURLOPT_HTTPHEADER     => [gh_source() === 'api'
-                ? 'Accept: application/vnd.github.raw'
-                : 'Accept: application/json, application/octet-stream, */*'],
-        ];
-        if (defined('CURLOPT_PROTOCOLS')) {
-            $opts[CURLOPT_PROTOCOLS] = CURLPROTO_HTTPS;
-        }
-        curl_setopt_array($ch, $opts);
-        $body = curl_exec($ch);
-        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $errno = (int)curl_errno($ch);
-        $err = (string)curl_error($ch);
-        $redirect = (string)curl_getinfo($ch, CURLINFO_REDIRECT_URL);
-        curl_close($ch);
+        $r = gh_curl_once($cur, $limit, $timeout, $verify);
 
-        if ($body === false) {
-            return ['ok' => false, 'body' => '', 'error' => gh_net_hint($errno, $err), 'code' => $code, 'url' => $cur];
-        }
-        if (strlen($body) > $limit) {
-            return ['ok' => false, 'body' => '', 'error' => '响应超过大小上限，疑似不是预期文件', 'code' => $code, 'url' => $cur];
-        }
-        if ($code >= 300 && $code < 400 && $redirect !== '') {
-            if (++$hops > 3) {
-                return ['ok' => false, 'body' => '', 'error' => '跳转次数过多，已中止', 'code' => $code, 'url' => $cur];
-            }
-            $cur = $redirect;
+        // 证书类错误且当前还在校验 → 自动降级重试（不计跳转次数）
+        if (!$r['ok'] && $r['cert_err'] && $verify) {
+            $verify = false;
+            $GLOBALS['__gh_tls_fallback'] = true;
             continue;
         }
-        if ($code !== 200) {
-            if ($code === 403 || $code === 429) {
+        if (!$r['ok']) {
+            return ['ok' => false, 'body' => '', 'error' => $r['error'], 'code' => $r['code'], 'url' => $cur];
+        }
+        if ($r['code'] >= 300 && $r['code'] < 400 && $r['redirect'] !== '') {
+            if (++$hops > 3) {
+                return ['ok' => false, 'body' => '', 'error' => '跳转次数过多，已中止', 'code' => $r['code'], 'url' => $cur];
+            }
+            $cur = $r['redirect'];
+            continue;
+        }
+        if ($r['code'] !== 200) {
+            if ($r['code'] === 403 || $r['code'] === 429) {
                 return ['ok' => false, 'body' => '',
                     'error' => 'GitHub API 触发限流（未认证 60 次/小时）或权限不足，请稍后再试；也可在「更新源设置」里切到 raw 通道或配置自建镜像',
-                    'code' => $code, 'url' => $cur];
+                    'code' => $r['code'], 'url' => $cur];
             }
-            return ['ok' => false, 'body' => '', 'error' => '更新源返回 HTTP ' . $code
-                . ($code === 404 ? '（清单或更新包不存在，检查仓库/分支/通道设置）' : ''), 'code' => $code, 'url' => $cur];
+            return ['ok' => false, 'body' => '', 'error' => '更新源返回 HTTP ' . $r['code']
+                . ($r['code'] === 404 ? '（清单或更新包不存在，检查仓库/分支/通道设置）' : ''),
+                'code' => $r['code'], 'url' => $cur];
         }
-        return ['ok' => true, 'body' => (string)$body, 'error' => '', 'code' => $code, 'url' => $cur];
+        return ['ok' => true, 'body' => $r['body'], 'error' => '', 'code' => 200, 'url' => $cur];
     }
 }
 
@@ -335,6 +367,7 @@ function gh_plan_chain(array $releases, string $cur): array
 /** 只检查、不下载 */
 function gh_check(): array
 {
+    $GLOBALS['__gh_tls_fallback'] = false;
     $m = gh_manifest();
     $cur = gh_current_version();
     $chain = gh_plan_chain($m['releases'], $cur);
@@ -347,6 +380,9 @@ function gh_check(): array
         'chain'      => $chain,
         'broken'     => $m['latest'] !== '' && version_compare($m['latest'], $cur, '>') && count($chain) === 0,
         'checked_at' => date('Y-m-d H:i:s'),
+        'warning'    => !empty($GLOBALS['__gh_tls_fallback'])
+            ? '服务器缺少 CA 根证书，本次已自动跳过 TLS 证书校验；更新包完整性仍由 sha256 逐包校验保证'
+            : '',
     ];
 }
 
@@ -382,6 +418,7 @@ function gh_download_zip(array $r): string
 function gh_update_run(): array
 {
     @set_time_limit(300);
+    $GLOBALS['__gh_tls_fallback'] = false;
     $cur = gh_current_version();
     $m = gh_manifest();
     $chain = gh_plan_chain($m['releases'], $cur);
@@ -392,6 +429,8 @@ function gh_update_run(): array
             'steps'   => [],
             'from'    => $cur,
             'to'      => $cur,
+            'warning' => !empty($GLOBALS['__gh_tls_fallback'])
+                ? '服务器缺少 CA 根证书，本次已自动跳过 TLS 证书校验' : '',
         ];
     }
 
@@ -416,6 +455,8 @@ function gh_update_run(): array
                 'steps'   => $steps,
                 'from'    => $cur,
                 'to'      => $cur,
+                'warning' => !empty($GLOBALS['__gh_tls_fallback'])
+                    ? '服务器缺少 CA 根证书，本次已自动跳过 TLS 证书校验' : '',
             ];
         }
         $steps[] = ['version' => $r['version'], 'message' => $res['message']];
@@ -430,5 +471,7 @@ function gh_update_run(): array
         'steps'   => $steps,
         'from'    => $chain[0]['min_version'] ?? '',
         'to'      => $cur,
+        'warning' => !empty($GLOBALS['__gh_tls_fallback'])
+            ? '服务器缺少 CA 根证书，本次已自动跳过 TLS 证书校验；更新包完整性仍由 sha256 逐包校验保证' : '',
     ];
 }
