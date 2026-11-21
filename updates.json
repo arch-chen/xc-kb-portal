@@ -2,9 +2,9 @@
     "schema": 1,
     "repo": "arch-chen/xc-kb-portal",
     "branch": "main",
-    "generated_at": "2026-11-21T05:59:03+00:00",
-    "current_src": "2.2.1",
-    "latest": "2.2.1",
+    "generated_at": "2026-11-21T06:17:42+00:00",
+    "current_src": "2.2.2",
+    "latest": "2.2.2",
     "releases": [
         {
             "version": "1.1.0",
@@ -230,6 +230,15 @@
             "zip": "update-2.2.1.zip",
             "sha256": "fdf01e7057a28c6b4fb6cb722fd11ea8f3893418b98df60b66a6ace523f5b23e",
             "size": 379562
+        },
+        {
+            "version": "2.2.2",
+            "min_version": "2.2.1",
+            "released": "2026-11-21",
+            "notes": "左栏合并扩展到全站：首页 / 知识库分组页 / AI 工作台的左侧栏都同时显示「我的分组」和「AI 工作台 / 对话列表 / ＋ 新对话」，主区仍各自独立；非工作台页也能新建、重命名、删除会话。修复文件存储配置保存后「值被改、参数不生效」：编辑表单里多个驱动共用同名字段且隐藏块照样提交，后块覆盖前块；现按驱动分组命名 + 非当前驱动 disabled + 禁止自动填充 + 拦截掩码串覆盖密钥。七牛绑定域名 / 上传域名容错去掉协议与路径并补充正确填法提示。手动上传 zip 的离线升级入口保留，发版仍直推 GitHub。地址与 API 全部不变",
+            "zip": "update-2.2.2.zip",
+            "sha256": "8e883b503c7df7364cab82cf919daebde5a4e8bf8d1262ff3bcf29aaafde274b",
+            "size": 384705
         }
     ]
 }

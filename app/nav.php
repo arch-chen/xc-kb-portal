@@ -88,3 +88,51 @@ function nav_bill_tabs(string $cur): string
     }
     return $h . '</div>';
 }
+
+/**
+ * 全站常驻的「AI 工作台」会话侧栏（2.2.2）。
+ *
+ * 首页 / 分组页 / 工作台页左栏都同时显示「我的分组」和这块对话列表，
+ * 但主区仍按路由各自渲染——只是菜单栏合并，页面本身不合并。
+ * 会话数据在这里统一查，视图不再各自塞 $GLOBALS['side_panel']。
+ * 工作台页由 agent.php 内嵌脚本接管交互；其它页面由 assets/agent-side.js 接管，
+ * 所以「＋ 新对话 / 改名 / 删除」在知识库页面也能直接用。
+ */
+function nav_agent_side(int $uid, int $runId = 0): string
+{
+    if ($uid <= 0 || !ai_on()) {
+        return '';
+    }
+    // 没有可用模型时不显示（与 AI 工作台页面保持一致，免得点了没反应）
+    if (!ai_models_for($uid)) {
+        return '';
+    }
+    $runs = agent_runs_list($uid, 40);
+    $csrf = csrf_token();
+
+    $h = '<div class="side-section side-agent" data-agent-side="1">';
+    $h .= '<div class="side-title side-agent-head">'
+        . '<a class="side-agent-link" href="' . e(u('agent')) . '">AI 工作台 <span aria-hidden="true">↗</span></a>'
+        . '<span class="side-count">' . count($runs) . '</span>'
+        . '</div>';
+    $h .= '<button type="button" class="btn primary block side-new" id="agNew"'
+        . ' data-csrf="' . e($csrf) . '">＋ 新对话</button>';
+    $h .= '<nav class="agent-runs" id="agRuns" data-csrf="' . e($csrf) . '">';
+    foreach ($runs as $r) {
+        $on = (int)$r['id'] === $runId ? ' on' : '';
+        $h .= '<div class="agent-run-row' . $on . '" data-id="' . (int)$r['id'] . '"'
+            . ' data-title="' . e((string)$r['title']) . '">'
+            . '<a class="agent-run" href="' . e(u('agent', ['id' => (int)$r['id']])) . '">'
+            . '<span class="agent-run-t">' . e((string)$r['title']) . '</span>'
+            . '<span class="agent-run-m">' . e(mb_substr((string)$r['updated_at'], 5, 11, 'UTF-8'))
+            . ' · ' . (int)$r['steps'] . ' 步</span>'
+            . '</a>'
+            . '<button type="button" class="agent-run-more" aria-label="会话操作" title="重命名 / 删除">⋯</button>'
+            . '</div>';
+    }
+    if (!$runs) {
+        $h .= '<div class="side-empty">还没有对话，点上面的「＋ 新对话」开始</div>';
+    }
+    $h .= '</nav></div>';
+    return $h;
+}

@@ -116,7 +116,7 @@ $cfgLabels = storage_driver_fields('local'); // 只为拿类型，下面按驱�
   <details class="fold" <?= $edit ? 'open' : '' ?>>
     <summary><?= $edit ? '编辑平台' : '接入新平台' ?> <span class="fold-note">本地 / OSS / COS / 七牛 / 又拍云 / R2</span></summary>
     <div class="fold-body">
-  <form method="post" class="form" id="provForm">
+  <form method="post" class="form" id="provForm" autocomplete="off">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="provider_save">
     <input type="hidden" name="provider_id" value="<?= $edit ? (int)$edit['id'] : 0 ?>">
@@ -134,19 +134,32 @@ $cfgLabels = storage_driver_fields('local'); // 只为拿类型，下面按驱�
       </label>
     </div>
 
+    <?php
+    // 六个驱动共用 bucket/ak/sk/domain 等同名 name，早先只靠 display:none 隐藏，
+    // 但隐藏字段照样会提交，后面的驱动块会把前面用户填的值覆盖掉（最后是 r2 块），
+    // 于是「保存后重开编辑像被改了、参数不生效」。三重加固：
+    //   1) 字段按驱动分组命名 cfg[driver][field]，后端只取当前驱动那一组；
+    //   2) 非当前驱动块在服务端就输出 disabled（JS 失效也不会误提交）；
+    //   3) 关掉自动填充，避免浏览器把密钥框当登录框、把掩码串写进 SecretKey。
+    $activeDrv = (string)($edit['driver'] ?? 'local');
+    ?>
     <?php foreach (storage_driver_labels() as $dk => $dl): ?>
+      <?php $off = $dk !== $activeDrv ? ' disabled' : ''; ?>
       <div class="drv-fields" data-driver="<?= e($dk) ?>" style="display:none">
         <?php foreach (storage_driver_fields($dk) as $fk => $meta): ?>
           <?php
             $label = $meta[0]; $ph = $meta[1]; $def = $meta[2]; $secret = $meta[3];
-            $cur = (string)($editCfg[$fk] ?? '');
+            // 只有当前驱动才回显已保存配置，切换平台时不会把旧平台参数带过去
+            $cur = $dk === $activeDrv ? (string)($editCfg[$fk] ?? '') : '';
+            $nm = 'cfg[' . $dk . '][' . $fk . ']';
+            $ac = $secret ? 'new-password' : 'off';
           ?>
           <label><?= e($label) ?>
-            <?php if ($secret && $edit): ?>
-              <input type="password" name="cfg[<?= e($fk) ?>]" value="" placeholder="已保存，留空表示不修改">
+            <?php if ($secret && $edit && $dk === $activeDrv): ?>
+              <input type="password" name="<?= e($nm) ?>" value="" autocomplete="<?= $ac ?>"<?= $off ?> placeholder="已保存，留空表示不修改">
             <?php else: ?>
-              <input type="<?= $secret ? 'password' : 'text' ?>" name="cfg[<?= e($fk) ?>]"
-                     value="<?= e($cur !== '' ? $cur : $def) ?>" placeholder="<?= e($ph) ?>">
+              <input type="<?= $secret ? 'password' : 'text' ?>" name="<?= e($nm) ?>"
+                     value="<?= e($cur !== '' ? $cur : $def) ?>" autocomplete="<?= $ac ?>"<?= $off ?> placeholder="<?= e($ph) ?>">
             <?php endif; ?>
           </label>
         <?php endforeach; ?>
@@ -288,7 +301,11 @@ $cfgLabels = storage_driver_fields('local'); // 只为拿类型，下面按驱�
   function syncDrv() {
     var v = sel ? sel.value : '';
     document.querySelectorAll('.drv-fields').forEach(function (el) {
-      el.style.display = el.getAttribute('data-driver') === v ? '' : 'none';
+      var on = el.getAttribute('data-driver') === v;
+      el.style.display = on ? '' : 'none';
+      // 隐藏块里的字段必须 disabled：display:none 不会阻止表单提交，
+      // 同名字段一旦提交就会覆盖当前驱动刚填好的值。
+      el.querySelectorAll('input, select, textarea').forEach(function (i) { i.disabled = !on; });
     });
   }
   if (sel) { sel.addEventListener('change', syncDrv); syncDrv(); }

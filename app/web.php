@@ -1495,9 +1495,19 @@ function ctrl_admin_files(): void
             }
             $name = trim(post('name')) ?: storage_driver_labels()[$driver];
             $old = $id > 0 ? provider_config(provider_by_id($id) ?: []) : [];
+            // 表单按驱动分组提交 cfg[driver][field]；兼容升级瞬间浏览器缓存的旧表单
+            // （旧表单是扁平 cfg[field]，只在该驱动分组完全没有时才回退读取）。
+            $postCfg = $_POST['cfg'] ?? [];
+            $group = (isset($postCfg[$driver]) && is_array($postCfg[$driver])) ? $postCfg[$driver] : [];
             $cfg = [];
             foreach (storage_driver_fields($driver) as $k => $meta) {
-                $v = trim((string)($_POST['cfg'][$k] ?? ''));
+                $raw = array_key_exists($k, $group) ? $group[$k] : ($postCfg[$k] ?? '');
+                $v = trim((string)(is_scalar($raw) ? $raw : ''));
+                // 浏览器密码管理器会把掩码串自动填进密钥框，那不是密钥，
+                // 当作「未修改」，别把真 SecretKey 覆盖成一串星号。
+                if ($v !== '' && preg_match('/^[*•·●]+$/u', $v)) {
+                    $v = '';
+                }
                 if ($v === '' && !empty($meta[3]) && isset($old[$k]) && $old[$k] !== '') {
                     $cfg[$k] = $old[$k]; // 密钥留空 = 不修改
                 } else {

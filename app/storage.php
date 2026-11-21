@@ -153,11 +153,11 @@ function storage_driver_fields(string $driver): array
             'domain' => ['自定义域名（可选）', '', '', false],
         ],
         'qiniu' => [
-            'bucket' => ['Bucket', '空间名', '', false],
-            'ak'     => ['AccessKey', '', '', false],
-            'sk'     => ['SecretKey', '加密保存', '', true],
-            'domain' => ['绑定域名', '必填，私有空间下载要用它拼 URL', '', false],
-            'host'   => ['上传加速域名（可选）', '默认 up.qiniup.com', 'up.qiniup.com', false],
+            'bucket' => ['Bucket', '七牛控制台里的空间名（不是这里的显示名称）', '', false],
+            'ak'     => ['AccessKey', '密钥管理里的 AK', '', false],
+            'sk'     => ['SecretKey', '加密保存，编辑时留空表示不修改', '', true],
+            'domain' => ['绑定域名', '只填域名，如 img.example.com；不要带 https:// 和路径', '', false],
+            'host'   => ['上传加速域名（可选）', '留空用默认 up.qiniup.com；华东可填 up-z0.qiniup.com，不要带 https://', 'up.qiniup.com', false],
         ],
         'upyun' => [
             'bucket'   => ['空间名', '', '', false],

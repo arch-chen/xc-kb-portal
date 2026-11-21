@@ -7,10 +7,9 @@ $route = get_q('r');
 $f = flash();
 $section = $u ? nav_section($route) : '';
 $isAdmin = $u ? is_admin($u) : false;
-// 左栏常驻「我的分组」；AI 工作台会额外把「对话列表 + 新对话」塞进来（见 views/agent.php），
-// 两块并列在同一个侧栏里，不再互相替换。主区内容仍按路由各自渲染，
-// 首页与 AI 工作台依旧是两个独立页面。
-$sidePanel = (string)($GLOBALS['side_panel'] ?? '');
+// 左栏常驻两块：「我的分组」+「AI 工作台（对话列表 / 新对话）」，所有页面都在。
+// 会话侧栏由 nav_agent_side() 统一渲染，视图不再各自塞 side_panel。
+// 主区内容仍按路由各自渲染，首页 / 分组页 / AI 工作台依旧是独立页面。
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN" data-theme="system">
@@ -69,9 +68,7 @@ $sidePanel = (string)($GLOBALS['side_panel'] ?? '');
       </nav>
     </div>
 
-    <?php if ($sidePanel !== ''): ?>
-      <?= $sidePanel ?>
-    <?php endif; ?>
+    <?= $u ? nav_agent_side((int)$u['id'], (int)($GLOBALS['agent_run_id'] ?? 0)) : '' ?>
 
     <div class="side-foot">
       <a class="side-item <?= $route === 'group_new' ? 'active' : '' ?>" href="<?= e(u('group_new')) ?>"><span class="ico">＋</span>新建分组</a>
@@ -108,5 +105,6 @@ $sidePanel = (string)($GLOBALS['side_panel'] ?? '');
   </main>
 </div>
 <script src="<?= e(asset('app.js')) ?>?v=<?= e(asset_ver('app.js')) ?>"></script>
+<script src="<?= e(asset('agent-side.js')) ?>?v=<?= e(asset_ver('agent-side.js')) ?>"></script>
 </body>
 </html>

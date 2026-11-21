@@ -21,33 +21,9 @@ $js = fn($v) => json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 $hasModels = $models !== [];
 $runId = (int)($run['id'] ?? 0);
 
-// 会话列表放到最左侧侧栏里（侧栏内容先渲染，layout 再取用），
-// 主区只留对话窗口，页面本身不出现第二根滚动条。
-if ($hasModels) {
-    ob_start();
-    ?>
-    <div class="side-section side-agent">
-      <div class="side-title">对话 <span class="side-count"><?= count($runs) ?></span></div>
-      <button type="button" class="btn primary block side-new" id="agNew">＋ 新对话</button>
-      <nav class="agent-runs" id="agRuns">
-        <?php foreach ($runs as $r): ?>
-          <div class="agent-run-row <?= (int)$r['id'] === $runId ? 'on' : '' ?>"
-               data-id="<?= (int)$r['id'] ?>" data-title="<?= e((string)$r['title']) ?>">
-            <a class="agent-run" href="<?= e(u('agent', ['id' => (int)$r['id']])) ?>">
-              <span class="agent-run-t"><?= e((string)$r['title']) ?></span>
-              <span class="agent-run-m"><?= e(mb_substr((string)$r['updated_at'], 5, 11, 'UTF-8')) ?> · <?= (int)$r['steps'] ?> 步</span>
-            </a>
-            <button type="button" class="agent-run-more" aria-label="会话操作" title="重命名 / 删除">⋯</button>
-          </div>
-        <?php endforeach; ?>
-        <?php if (!$runs): ?>
-          <div class="side-empty">还没有对话，点上面的「＋ 新对话」开始</div>
-        <?php endif; ?>
-      </nav>
-    </div>
-    <?php
-    $GLOBALS['side_panel'] = ob_get_clean();
-}
+// 会话列表改由 layout.php 的 nav_agent_side() 全站常驻渲染（首页 / 分组页也能看到），
+// 这里只把当前会话 id 交给它做高亮；主区依旧只放对话窗口，不出现第二根滚动条。
+$GLOBALS['agent_run_id'] = $runId;
 ?>
 <section class="page-head agent-head">
   <div>

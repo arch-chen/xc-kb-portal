@@ -21,15 +21,26 @@ class StorageQiniu extends StorageDriver
 
     protected function uploadHost(): string
     {
-        $h = $this->opt('host', 'up.qiniup.com');
+        $h = trim((string)$this->opt('host', 'up.qiniup.com'));
+        if ($h === '') { $h = 'up.qiniup.com'; }
         $h = preg_replace('#^https?://#i', '', $h) ?? $h;
+        // 同样容错「粘了完整 URL」的情况，上传域名只能是 host
+        $host = parse_url('https://' . $h, PHP_URL_HOST);
+        if (is_string($host) && $host !== '') { $h = $host; }
         return rtrim($h, '/');
     }
 
     protected function domain(): string
     {
-        $d = $this->need('domain', '绑定域名');
+        $d = trim($this->need('domain', '绑定域名'));
         $d = preg_replace('#^https?://#i', '', $d) ?? $d;
+        // 后台常见误填：把 https://cdn.example.com/some/path 整条粘进来。
+        // 绑定域名只能是 host，路径会拼成 404 的下载 URL，这里容错只取主机部分。
+        $host = parse_url('https://' . $d, PHP_URL_HOST);
+        if (is_string($host) && $host !== '') {
+            $port = parse_url('https://' . $d, PHP_URL_PORT);
+            $d = $host . ($port ? ':' . $port : '');
+        }
         return rtrim($d, '/');
     }
 
