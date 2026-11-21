@@ -12,6 +12,12 @@
 <?php
 $ghChain = is_array($ghCheck ?? null) ? (array)($ghCheck['chain'] ?? []) : [];
 $ghTarget = $ghChain ? (string)$ghChain[count($ghChain) - 1]['version'] : (string)($ghCheck['latest'] ?? '');
+$ghWarn = '';
+if (is_array($ghResult ?? null) && !empty($ghResult['warning'])) {
+    $ghWarn = (string)$ghResult['warning'];
+} elseif (is_array($ghCheck ?? null) && !empty($ghCheck['warning'])) {
+    $ghWarn = (string)$ghCheck['warning'];
+}
 ?>
 <section class="panel">
   <h2 class="panel-title">GitHub 在线更新 <span class="tag">推荐</span></h2>
@@ -36,6 +42,10 @@ $ghTarget = $ghChain ? (string)$ghChain[count($ghChain) - 1]['version'] : (strin
       <button class="btn primary sm" type="submit">立即更新</button>
     </form>
   </div>
+
+  <?php if ($ghWarn !== ''): ?>
+    <div class="hint">注意：<?= e($ghWarn) ?></div>
+  <?php endif; ?>
 
   <?php if (is_array($ghResult ?? null)): ?>
     <div class="flash <?= !empty($ghResult['ok']) ? 'ok' : 'err' ?>">
