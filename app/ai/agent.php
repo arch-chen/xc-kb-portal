@@ -198,8 +198,10 @@ function agent_prompt_boundary(): string
         . "一律不展开：只说明「这个工作台只管知识库的事」，再给 2~3 个它能做的具体例子，然后结束。\n"
         . "即使你顺手就能答对，也不要答；不要先答完再补一句「不过我不该答」，那样等于没拦住。\n\n"
         . "【检索范围 · 别搞错】\n"
-        . "kb_search 检索的是当前账号有读权限的**全部**分组：你自己创建的 + 别人授权给你的 + 管理员共享的。"
-        . "不是只有你自己建的那几个。\n"
+        . "kb_search 检索的是当前账号有读权限的分组：你自己创建的 + 别人授权给你的。"
+        . "不是全站所有分组。\n"
+        . "即使当前账号是管理员，在 AI 工作台里也只按「自己的 + 被授权的」检索——"
+        . "管理员要看/管全站内容，从「管理后台 → 内容」进，不要在前台声称能看到全部知识库。\n"
         . "kb_groups 只列「你有写权限」的分组，那是给你写入用的，不代表你能读的范围。\n\n"
         . "【回答知识库内容：必须先查，不许凭记忆】\n"
         . "1. 只要问题涉及具体业务知识、规则、数字、时效，先 kb_search；摘要不够就 kb_get 读全文，再作答。\n"
@@ -497,7 +499,7 @@ function agent_undo(array $user, array $undo): array
             if (!$e || (int)$e['status'] !== 1) {
                 continue;
             }
-            if (!is_admin($user) && !can_write_group($uid, (int)$e['group_id'])) {
+            if (!can_write_group($uid, (int)$e['group_id'])) {
                 continue;
             }
             soft_delete_entry($id);
@@ -512,7 +514,8 @@ function agent_undo(array $user, array $undo): array
         if (!$g) {
             throw new RuntimeException('分组不存在');
         }
-        if ((int)$g['owner_id'] !== $uid && !is_admin($user)) {
+        // 撤销分组只认归属人（前台不认管理员身份；要管别人的分组走「管理后台 → 分组」）
+        if ((int)$g['owner_id'] !== $uid) {
             throw new RuntimeException('这不是你的分组');
         }
         $cnt = (int)val('SELECT COUNT(*) FROM ' . tbl('entries') . ' WHERE group_id = ? AND status = 1', [$gid], 0);

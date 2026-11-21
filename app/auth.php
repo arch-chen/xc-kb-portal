@@ -37,6 +37,11 @@ function require_login(): array
     return $u;
 }
 
+/**
+ * 进「管理后台」：这里才是全通身份。
+ * 打上 admin_ctx() 标记后，visible_groups() / group_perm() 才按管理员口径放开；
+ * 前台路由永远不打这个标，所以管理员在用户页面里就是个普通用户（2.3.0）。
+ */
 function require_admin(): array
 {
     $u = require_login();
@@ -44,6 +49,7 @@ function require_admin(): array
         http_response_code(403);
         exit('403 需要管理员权限');
     }
+    admin_ctx(true);
     return $u;
 }
 

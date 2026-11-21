@@ -1,13 +1,25 @@
-<?php /** @var ?array $e @var array $group @var array $links @var array $qaList */ ?>
+<?php /** @var ?array $e @var array $group @var array $links @var array $qaList @var bool $inAdmin */ ?>
+<?php
+// 后台（管理后台 → 内容）与前台（分组页 / 条目页）共用这套表单，
+// 但提交地址与「返回」必须各回各家：后台操作不能把用户甩到前台页面里。
+$inAdmin = $inAdmin ?? false;
+$route   = $inAdmin ? 'admin_entry_edit' : 'entry_edit';
+$backUrl = $inAdmin ? u('admin_content', ['gid' => $group['id']]) : u('g', ['slug' => $group['slug']]);
+?>
 <div class="crumbs">
-  <a href="<?= e(u('admin')) ?>">后台</a><span>/</span>
-  <a href="<?= e(u('admin_content', ['gid' => $group['id']])) ?>"><?= e($group['name']) ?></a><span>/</span>
+  <?php if ($inAdmin): ?>
+    <a href="<?= e(u('admin')) ?>">后台</a><span>/</span>
+    <a href="<?= e(u('admin_content', ['gid' => $group['id']])) ?>"><?= e($group['name']) ?></a><span>/</span>
+  <?php else: ?>
+    <a href="<?= e(u()) ?>">首页</a><span>/</span>
+    <a href="<?= e(u('g', ['slug' => $group['slug']])) ?>"><?= e($group['name']) ?></a><span>/</span>
+  <?php endif; ?>
   <span class="crumb-cur"><?= $e ? '编辑' : '新建' ?></span>
 </div>
 
 <?php $isDoc = $e ? $e['kind'] === 'doc' : (get_q('kind') === 'doc'); ?>
 
-<form method="post" action="<?= e(u('entry_edit', $e ? ['id' => $e['id']] : ['gid' => $group['id']])) ?>" class="entry-form">
+<form method="post" action="<?= e(u($route, $e ? ['id' => $e['id']] : ['gid' => $group['id']])) ?>" class="entry-form">
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save">
 
@@ -60,15 +72,15 @@
 
   <div class="form-actions sticky">
     <button class="btn primary" type="submit">保存</button>
-    <a class="btn" href="<?= e(u('admin_content', ['gid' => $group['id']])) ?>">返回列表</a>
+    <a class="btn" href="<?= e($backUrl) ?>">返回列表</a>
     <?php if ($e): ?>
-      <a class="btn" href="<?= e(u($e['kind'] === 'doc' ? 'doc' : 'entry', ['id' => $e['id']])) ?>" target="_blank">查看</a>
+      <a class="btn" href="<?= e(u('admin_entry_view', ['id' => $e['id']])) ?>" target="_blank">查看</a>
     <?php endif; ?>
   </div>
 </form>
 
 <?php if ($e): ?>
-  <form method="post" action="<?= e(u('entry_edit', ['id' => $e['id']])) ?>"
+  <form method="post" action="<?= e(u($route, ['id' => $e['id']])) ?>"
         onsubmit="return confirm('删除后前台不再显示，确定？')" class="danger-zone">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="delete">

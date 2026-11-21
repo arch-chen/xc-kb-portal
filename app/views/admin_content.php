@@ -6,8 +6,8 @@
   </div>
   <?php if ($group): ?>
     <div class="page-actions">
-      <a class="btn" href="<?= e(u('entry_edit', ['gid' => $group['id'], 'kind' => 'qa'])) ?>">＋ 问答</a>
-      <a class="btn" href="<?= e(u('entry_edit', ['gid' => $group['id'], 'kind' => 'doc'])) ?>">＋ 文档</a>
+      <a class="btn" href="<?= e(u('admin_entry_edit', ['gid' => $group['id'], 'kind' => 'qa'])) ?>">＋ 问答</a>
+      <a class="btn" href="<?= e(u('admin_entry_edit', ['gid' => $group['id'], 'kind' => 'doc'])) ?>">＋ 文档</a>
     </div>
   <?php endif; ?>
 </section>
@@ -50,14 +50,14 @@
               <td class="mono tiny"><?= (int)$r['id'] ?></td>
               <td><span class="tag <?= e($r['kind']) ?>"><?= $r['kind'] === 'doc' ? '文档' : '问答' ?></span></td>
               <td class="col-title">
-                <a href="<?= e(u($r['kind'] === 'doc' ? 'doc' : 'entry', ['id' => $r['id']])) ?>" target="_blank">
+                <a href="<?= e(u('admin_entry_view', ['id' => $r['id']])) ?>" target="_blank">
                   <?= e($r['title'] ?: mb_substr((string)$r['question'], 0, 60, 'UTF-8')) ?>
                 </a>
               </td>
               <td class="tiny"><?= e($r['source']) ?></td>
               <td class="tiny">v<?= (int)$r['version'] ?></td>
               <td class="tiny"><?= e(substr((string)$r['updated_at'], 0, 16)) ?></td>
-              <td class="right"><a class="link" href="<?= e(u('entry_edit', ['id' => $r['id']])) ?>">编辑</a></td>
+              <td class="right"><a class="link" href="<?= e(u('admin_entry_edit', ['id' => $r['id']])) ?>">编辑</a></td>
             </tr>
           <?php endforeach; ?>
           </tbody>

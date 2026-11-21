@@ -1,10 +1,20 @@
-<?php /** @var array $e @var array $group @var array $docs @var bool $canWrite */ ?>
+<?php
+/** @var array $e @var array $group @var array $docs @var bool $canWrite
+ *  可选：$inAdmin（后台预览）、$backUrl（后台返回地址）
+ */
+$inAdmin = $inAdmin ?? false;
+?>
 <div class="crumbs">
-  <a href="<?= e(u()) ?>">首页</a>
-  <span>/</span>
-  <?php if ($group): ?>
-    <a href="<?= e(u('g', ['slug' => $group['slug']])) ?>"><?= e($group['name']) ?></a>
+  <?php if ($inAdmin): ?>
+    <a href="<?= e(u('admin')) ?>">后台</a><span>/</span>
+    <a href="<?= e(u('admin_content', ['gid' => $e['group_id']])) ?>"><?= e($group['name'] ?? '') ?></a><span>/</span>
+  <?php else: ?>
+    <a href="<?= e(u()) ?>">首页</a>
     <span>/</span>
+    <?php if ($group): ?>
+      <a href="<?= e(u('g', ['slug' => $group['slug']])) ?>"><?= e($group['name']) ?></a>
+      <span>/</span>
+    <?php endif; ?>
   <?php endif; ?>
   <span class="crumb-cur">问答</span>
 </div>
@@ -19,7 +29,7 @@
       <span>版本 v<?= (int)$e['version'] ?></span>
       <span>更新于 <?= e(human_date($e['updated_at'])) ?></span>
       <?php if ($canWrite): ?>
-        <a class="link" href="<?= e(u('entry_edit', ['id' => $e['id']])) ?>">编辑</a>
+        <a class="link" href="<?= e(u($inAdmin ? 'admin_entry_edit' : 'entry_edit', ['id' => $e['id']])) ?>">编辑</a>
       <?php endif; ?>
     </div>
   </header>

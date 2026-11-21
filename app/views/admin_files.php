@@ -250,9 +250,9 @@ $cfgLabels = storage_driver_fields('local'); // 只为拿类型，下面按驱�
           </td>
           <td class="tiny muted"><?= e((string)$f['created_at']) ?></td>
           <td class="ops">
-            <a class="btn sm" href="<?= e(u('f', ['id' => (int)$f['id']])) ?>" target="_blank" rel="noopener">打开</a>
+            <a class="btn sm" href="<?= e(u('admin_file', ['id' => (int)$f['id']])) ?>" target="_blank" rel="noopener">打开</a>
             <?php
-              $fileUrl = u('f', ['id' => (int)$f['id']]);
+              $fileUrl = u('admin_file', ['id' => (int)$f['id']]);
               $isImg = in_array(strtolower((string)$f['ext']), ['jpg','jpeg','png','gif','webp','bmp'], true);
               $ref = $isImg ? '![' . $f['name'] . '](' . $fileUrl . ')' : '[' . $f['name'] . '](' . $fileUrl . ')';
             ?>

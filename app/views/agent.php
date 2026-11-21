@@ -13,6 +13,8 @@
  */
 $route = 'agent';
 $scope = $scope ?? ['read' => 0, 'write' => 0];
+// 管理员标识只用于「提示你在前台和普通用户同权」，不参与任何放行判断
+$isAdmin = is_admin(current_user());
 $csrf = csrf_token();
 $base = u('agent');
 // 往 <script> 里塞 JSON 必须转义尖括号：抓回来的网页正文里一旦有 </script> 就会跑出脚本块
@@ -78,6 +80,7 @@ $GLOBALS['agent_run_id'] = $runId;
     <div class="agent-tip" id="agTip">
       <span class="tiny muted" id="agTipScope">
         检索范围：你能读的 <b><?= (int)$scope['read'] ?></b> 个分组（自己建的 + 别人授权的），其中 <b><?= (int)$scope['write'] ?></b> 个可写。
+        <?php if ($isAdmin): ?>当前是管理员账号，但这个页面和普通用户同权，全站内容请从「管理后台 → 内容」查看。<?php endif; ?>
         只答「本知识库怎么用」和「你能读到的库内容」，其他话题直接拒绝；单轮最多 <?= (int)$maxSteps ?> 步，每步一次模型调用。
       </span>
       <span class="tiny ag-tip-run" id="agTipRun" hidden></span>

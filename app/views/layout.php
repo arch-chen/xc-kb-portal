@@ -1,7 +1,7 @@
 <?php
 /** @var string $content */
 $u = current_user();
-$navGroups = $u ? visible_groups((int)$u['id']) : [];
+$navGroups = $u ? my_groups((int)$u['id']) : [];
 $activeGroup = get_q('g', '');
 $route = get_q('r');
 $f = flash();
@@ -44,19 +44,12 @@ $isAdmin = $u ? is_admin($u) : false;
       <div class="side-title">我的分组</div>
       <nav class="side-nav">
         <?php
-        // 管理员能看到全站分组，但左侧只列「自己的」（含共享给别人的）。
-        // 用户的分组属于后台管理范围，入口统一收在「管理后台 → 分组」里。
-        $sideMine = [];
-        foreach ($navGroups as $g) {
-            $o = (int)$g['owner_id'];
-            if ($isAdmin && $o > 0 && $o !== (int)$u['id']) {
-                continue;
-            }
-            $sideMine[] = $g;
-        }
+        // 侧栏只列「我的分组」。my_groups() 已经是前台口径（自己建的 + 被授权的），
+        // 所以不再按 is_admin 过滤——管理员的前台身份和普通用户一样（2.3.0）。
+        $sideMine = $navGroups;
         ?>
         <?php if (!$sideMine): ?>
-          <div class="side-empty"><?= $isAdmin ? '你还没有自己的分组；用户的分组在「管理后台 → 分组」里' : '还没有被授权的分组' ?></div>
+          <div class="side-empty"><?= $isAdmin ? '你还没有自己的分组；可到「管理后台 → 分组」里建，或让别人授权给你' : '还没有被授权的分组' ?></div>
         <?php endif; ?>
         <?php foreach ($sideMine as $g): ?>
           <a class="side-item <?= (string)$g['slug'] === $activeGroup ? 'active' : '' ?>"

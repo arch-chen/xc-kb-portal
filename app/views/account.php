@@ -16,7 +16,7 @@ $notify = (int)($u['notify_mail'] ?? 1) === 1;
   <div class="kv">
     <div><span>账号</span><b class="mono"><?= e($u['username']) ?></b></div>
     <div><span>昵称</span><b><?= e($u['display_name'] ?: $u['username']) ?></b></div>
-    <div><span>角色</span><b><?= $u['role'] === 'admin' ? '管理员' : '普通用户' ?></b></div>
+    <div><span>角色</span><b><?= $u['role'] === 'admin' ? '管理员<span class="muted tiny">（后台全通；前台与普通用户同权同价）</span>' : '普通用户' ?></b></div>
     <div>
       <span>邮箱</span>
       <b>

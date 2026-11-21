@@ -134,7 +134,7 @@ function agent_tool_groups(array $user): array
     $vis = visible_groups($uid);
     $rows = [];
     foreach ($vis as $g) {
-        $w = is_admin($user) || can_write_group($uid, (int)$g['id']);
+        $w = can_write_group($uid, (int)$g['id']);
         if (!$w) {
             continue;
         }
@@ -213,7 +213,7 @@ function agent_tool_get(array $user, array $args): array
     if (!$e || (int)$e['status'] !== 1) {
         return agent_tool_result(false, 'kb_get', '条目 #' . $id . ' 不存在');
     }
-    if (!is_admin($user) && !can_read_group($uid, (int)$e['group_id'])) {
+    if (!can_read_group($uid, (int)$e['group_id'])) {
         return agent_tool_result(false, 'kb_get', '我没有这个分组的读权限');
     }
     return agent_tool_result(true, 'kb_get', '读到条目 #' . $id . '（v' . (int)$e['version'] . '）', [
@@ -290,7 +290,7 @@ function agent_tool_save_qa(array $user, array $args): array
     if (!$g) {
         return agent_tool_result(false, 'kb_save_qa', '分组 id=' . $gid . ' 不存在，先用 kb_groups 查一下');
     }
-    if (!is_admin($user) && !can_write_group($uid, $gid)) {
+    if (!can_write_group($uid, $gid)) {
         return agent_tool_result(false, 'kb_save_qa', '我没有分组「' . $g['name'] . '」的写权限');
     }
 
@@ -353,7 +353,7 @@ function agent_tool_save_doc(array $user, array $args): array
     if (!$g) {
         return agent_tool_result(false, 'kb_save_doc', '分组 id=' . $gid . ' 不存在，先用 kb_groups 查一下');
     }
-    if (!is_admin($user) && !can_write_group($uid, $gid)) {
+    if (!can_write_group($uid, $gid)) {
         return agent_tool_result(false, 'kb_save_doc', '我没有分组「' . $g['name'] . '」的写权限');
     }
     if ($title === '') {

@@ -77,6 +77,14 @@ function ai_preflight(int $uid, array $user, int $modelId): ?array
 
         // ① 积分扣除：余额不够 → 充值 / 切换自定义接入模型
         if (str_contains($reason, '积分不足')) {
+            $hints = [
+                '充值到账后直接重新发送刚才的问题即可，不用新建对话。',
+                '自定义接入模型属于月付套餐功能：开通套餐后在「我的模型」里填接口地址、模型名和 API Key。',
+            ];
+            // 管理员在前台同样按普通用户计费（2.3.0），但可以自己加积分 / 开套餐
+            if (is_admin($user)) {
+                $hints[] = '当前账号是管理员：这个页面和普通用户同权同价。要给自己加积分或开套餐，去「管理后台 → AI 与套餐」操作，前台不能免单。';
+            }
             return ai_guide('credits', 'insufficient', '积分不足，暂时无法回答',
                 '你当前选择的是「积分扣除」（系统模型），本次需要 ' . $price . ' 积分，而账户余额只有 ' . $balance
                 . ' 积分。充值后可以继续；也可以改用你自己的模型接口，不消耗积分。',
@@ -88,10 +96,7 @@ function ai_preflight(int $uid, array $user, int $modelId): ?array
                     'switch'  => ai_switch_target($uid, 'custom'),
                     'balance' => $balance,
                     'price'   => $price,
-                    'hints'   => [
-                        '充值到账后直接重新发送刚才的问题即可，不用新建对话。',
-                        '自定义接入模型属于月付套餐功能：开通套餐后在「我的模型」里填接口地址、模型名和 API Key。',
-                    ],
+                    'hints'   => $hints,
                 ]);
         }
 

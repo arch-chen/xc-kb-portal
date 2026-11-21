@@ -2,7 +2,9 @@
 <section class="page-head">
   <div>
     <h1 class="page-title">管理后台</h1>
-    <p class="page-desc">系统设置、用户与权限、分组内容、API Key 都在这里，用上方菜单切换。</p>
+    <p class="page-desc">系统设置、用户与权限、分组内容、API Key 都在这里，用上方菜单切换。
+      这里是管理员身份：能看全站分组与内容、能给用户改积分与套餐。离开后台回到用户页面（首页 / 分组 / AI 工作台）后，
+      管理员和普通用户一样，只看得见自己建的与被授权的分组，AI 也按积分 / 套餐计费。</p>
   </div>
 </section>
 

@@ -7,7 +7,9 @@ declare(strict_types=1);
  * 口径（按需求确认）：
  *  - 系统模型：按次固定积分，调用前预扣，失败全额退回。
  *  - 用户自带模型：不扣积分，属于月付套餐功能，只受「槽位」和「每日次数」限制。
- *  - 管理员：不受限、不扣积分，但仍然记调用日志（方便看用量）。
+ *  - 管理员：**前台与普通用户同权同价**（2.3.0）。管理员要看全站内容、
+ *    给自己加积分 / 开套餐，都从「管理后台 → AI 与套餐」走；
+ *    在前台（AI 工作台 / AI 助手）里余额不足照样被门禁拦下，不再享免单。
  *
  * 余额只有 credit_wallets 一个来源，任何变动都必须写 credit_logs，便于对账。
  */
@@ -206,12 +208,14 @@ function ai_entitlement(int $uid): array
 
 /**
  * 判断某用户能不能用某个模型。返回 ['ok'=>bool,'reason'=>string,'free'=>bool]
- * free=true 表示这次调用不扣积分（管理员 / 自有模型）。
+ * free=true 表示这次调用不扣积分（自有模型，或模型单价为 0）。
+ *
+ * 2.3.0：管理员不再在这里免单。前台就是普通用户，一样受积分 / 套餐 / 每日次数约束；
+ * 想不花钱调试，用「管理后台 → AI 与套餐」给自己加积分，或接一个自有模型。
  */
 function ai_can_use_model(array $user, array $model, array $ent): array
 {
     $uid = (int)$user['id'];
-    $isAdmin = is_admin($user);
 
     if ((int)$model['enabled'] !== 1) {
         return ['ok' => false, 'reason' => '这个模型已停用', 'free' => false];
@@ -220,10 +224,6 @@ function ai_can_use_model(array $user, array $model, array $ent): array
     $own = (int)($model['owner_id'] ?? 0);
     if ($own !== 0 && $own !== $uid) {
         return ['ok' => false, 'reason' => '这不是你的模型', 'free' => false];
-    }
-
-    if ($isAdmin) {
-        return ['ok' => true, 'reason' => '', 'free' => true];
     }
 
     if ($ent['daily_limit'] > 0 && $ent['daily_used'] >= $ent['daily_limit']) {

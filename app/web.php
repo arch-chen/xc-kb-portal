@@ -480,9 +480,10 @@ function ctrl_group(): void
 
     $owner = (int)$g['owner_id'];
     $ownerNick = $owner > 0 ? (group_owner_nick($g) ?: '用户' . $owner) : '';
-    $canManage = ($owner > 0 && $owner === (int)$u['id']) || is_admin($u);
+    // 前台只认归属人；共享分组（owner_id=0）的改名留给后台「分组管理」
+    $canManage = $owner > 0 && $owner === (int)$u['id'];
 
-    // 改名 / 改说明：归属人本人或管理员
+    // 改名 / 改说明：归属人本人（管理员在自己后台里改，不走这里）
     if (is_post()) {
         csrf_check();
         if (!$canManage) {
@@ -894,7 +895,11 @@ function ctrl_admin_groups(): void
                 if ($action === 'create') {
                     $data['slug'] = make_slug($name);
                     $data['created_at'] = now_str();
-                    insert_row('groups', $data);
+                    $gid = insert_row('groups', $data);
+                    // 2.3.0：后台建的共享分组（owner_id=0）没有归属人，前台又不再给管理员全通，
+                    // 必须把创建者记成成员，否则他自己在用户页面里也看不到这个分组。
+                    group_member_ensure($gid, (int)$u['id']);
+                    perm_flush((int)$u['id']);
                     audit('create_group', $name);
                     flash('分组已创建，记得给用户授权');
                     redirect(u('admin_groups', ['scope' => post('scope') === 'users' ? 'users' : null]));
@@ -1011,9 +1016,28 @@ function ctrl_admin_content(): void
     ]);
 }
 
+/** 前台编辑条目：只按分组写权限，管理员在这里也只是普通用户 */
 function ctrl_entry_edit(): void
 {
+    entry_edit_run(false);
+}
+
+/** 后台编辑条目（管理后台 → 内容）：管理员在这里是全通身份，返回也回后台 */
+function ctrl_admin_entry_edit(): void
+{
+    require_admin();
+    entry_edit_run(true);
+}
+
+/**
+ * 条目编辑的共用实现。
+ * $inAdmin=false 时按前台口径（can_write_group，管理员不额外放行）；
+ * $inAdmin=true 时已在后台上下文里（admin_ctx 已打标），can_write_group 会自动全通。
+ */
+function entry_edit_run(bool $inAdmin): void
+{
     $u = require_login();
+    $back = $inAdmin ? 'admin_content' : '';
     $id = (int)get_q('id', '0');
     $gid = (int)get_q('gid', '0');
     $e = $id > 0 ? entry_by_id($id) : null;
@@ -1023,10 +1047,9 @@ function ctrl_entry_edit(): void
     $group = group_by_id($gid);
     if (!$group) {
         flash('请先选择分组', 'err');
-        redirect(is_admin($u) ? u('admin_content') : u());
+        redirect($inAdmin ? u('admin_content') : u());
     }
-    // 管理员，或对该分组有写权限的人
-    if (!is_admin($u) && !can_write_group((int)$u['id'], $gid)) {
+    if (!can_write_group((int)$u['id'], $gid)) {
         http_response_code(403);
         exit('403 没有该分组的写权限');
     }
@@ -1036,9 +1059,9 @@ function ctrl_entry_edit(): void
         $action = post('action', 'save');
         if ($action === 'delete' && $e) {
             soft_delete_entry((int)$e['id']);
-            audit('delete_entry', 'id=' . $e['id']);
+            audit('delete_entry', 'id=' . $e['id'] . ($inAdmin ? ' from=admin' : ''));
             flash('已删除');
-            redirect(is_admin($u) ? u('admin_content', ['gid' => $gid]) : u('g', ['slug' => $group['slug']]));
+            redirect($inAdmin ? u('admin_content', ['gid' => $gid]) : u('g', ['slug' => $group['slug']]));
         }
         $data = [
             'group_id' => $gid,
@@ -1057,9 +1080,9 @@ function ctrl_entry_edit(): void
                 $ids = array_filter(array_map('intval', (array)($_POST['links'] ?? [])));
                 save_doc_links($newId, $ids);
             }
-            audit($e ? 'update_entry' : 'create_entry', 'id=' . $newId);
+            audit($e ? 'update_entry' : 'create_entry', 'id=' . $newId . ($inAdmin ? ' from=admin' : ''));
             flash('已保存');
-            redirect(u('entry_edit', ['id' => $newId]));
+            redirect(u($inAdmin ? 'admin_entry_edit' : 'entry_edit', ['id' => $newId]));
         }
     }
 
@@ -1070,6 +1093,40 @@ function ctrl_entry_edit(): void
     view('admin_entry_edit', [
         'title' => $e ? '编辑条目' : '新建条目',
         'e' => $e, 'group' => $group, 'links' => $links, 'qaList' => $qaList,
+        'inAdmin' => $inAdmin,
+    ]);
+}
+
+/**
+ * 后台预览条目（管理后台 → 内容 → 查看）。
+ * 前台 entry/doc 现在按普通用户口径判权，管理员看别人的分组会 403；
+ * 后台要核对内容就得走这里——地址带 admin_ 前缀，天然是后台上下文。
+ */
+function ctrl_admin_entry_view(): void
+{
+    require_admin();
+    $u = current_user();
+    $id = (int)get_q('id');
+    $e = $id > 0 ? entry_by_id($id) : null;
+    if (!$e || (int)$e['status'] !== 1) {
+        http_response_code(404);
+        exit('条目不存在');
+    }
+    $g = group_by_id((int)$e['group_id']);
+    $backUrl = u('admin_content', ['gid' => (int)$e['group_id']]);
+    if ($e['kind'] === 'doc') {
+        view('doc', [
+            'title' => $e['title'], 'e' => $e, 'group' => $g, 'items' => doc_entries($id),
+            'canWrite' => true, 'inAdmin' => true, 'backUrl' => $backUrl,
+        ]);
+        return;
+    }
+    view('entry', [
+        'title' => $e['title'] ?: mb_substr((string)$e['question'], 0, 40, 'UTF-8'),
+        'e' => $e, 'group' => $g,
+        'docs' => entry_docs($id),
+        'versions' => entry_versions($id),
+        'canWrite' => true, 'inAdmin' => true, 'backUrl' => $backUrl,
     ]);
 }
 
@@ -1729,8 +1786,20 @@ function storage_job_public(array $job): array
     ];
 }
 
-/** 附件下载（走鉴权，不暴露对象存储地址） */
+/** 附件下载（走鉴权，不暴露对象存储地址）。前台口径：按分组读权限 */
 function ctrl_file(): void
+{
+    file_send();
+}
+
+/** 后台下载 / 预览附件（管理后台 → 文件存储）：require_admin 已打后台标记，不在前台口径里 */
+function ctrl_admin_file(): void
+{
+    require_admin();
+    file_send();
+}
+
+function file_send(): void
 {
     $id = (int)get_q('id', '0');
     $att = $id > 0 ? attachment_by_id($id) : null;
@@ -1783,12 +1852,12 @@ function ai_http_status(string $kind): int
     };
 }
 
-/** 我能写哪些分组（AI 结果入库用） */
+/** 我能写哪些分组（AI 结果入库用）。前台口径：按分组写权限，管理员不额外放行 */
 function ai_writable_groups(array $u): array
 {
     $out = [];
     foreach (visible_groups((int)$u['id']) as $g) {
-        if (is_admin($u) || can_write_group((int)$u['id'], (int)$g['id'])) {
+        if (can_write_group((int)$u['id'], (int)$g['id'])) {
             $out[] = $g;
         }
     }
@@ -1853,7 +1922,7 @@ function ctrl_ai(): void
                 if (!$e || (int)$e['status'] !== 1) {
                     throw new RuntimeException('条目不存在或已删除');
                 }
-                if (!is_admin($u) && !can_write_group($uid, (int)$e['group_id'])) {
+                if (!can_write_group($uid, (int)$e['group_id'])) {
                     throw new AiError('forbidden', '你没有这个分组的写权限');
                 }
                 $body = (string)($_POST['body'] ?? '');
@@ -1877,7 +1946,7 @@ function ctrl_ai(): void
                 if (!group_by_id($gid)) {
                     throw new RuntimeException('请先选择分组');
                 }
-                if (!is_admin($u) && !can_write_group($uid, $gid)) {
+                if (!can_write_group($uid, $gid)) {
                     throw new AiError('forbidden', '你没有这个分组的写权限');
                 }
                 $q = trim(post('question'));
@@ -2034,7 +2103,7 @@ function ctrl_agent(): void
                 if (!is_array($res) || empty($res['undo'])) {
                     throw new RuntimeException('这条没有可撤销的动作');
                 }
-                if (!is_admin($u) && (int)$m['ok'] !== 1) {
+                if ((int)$m['ok'] !== 1) {
                     throw new RuntimeException('失败的写入不用撤销');
                 }
                 $out = agent_undo($u, (array)$res['undo']);
@@ -2069,7 +2138,7 @@ function ctrl_agent(): void
     $visGroups = visible_groups($uid);
     $writable = 0;
     foreach ($visGroups as $g) {
-        if (is_admin($u) || can_write_group($uid, (int)$g['id'])) {
+        if (can_write_group($uid, (int)$g['id'])) {
             $writable++;
         }
     }

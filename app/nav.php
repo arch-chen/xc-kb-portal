@@ -50,7 +50,9 @@ function nav_sub_tabs(string $route): array
             ['admin_mail',     '邮件',      u('admin_mail')],
             ['admin_system',   '系统与升级', u('admin_system')],
         ];
-        return ['cur' => $route, 'items' => $items];
+        // 条目编辑属于「内容」的下一层，横向子菜单仍高亮「内容」
+        $cur = $route === 'admin_entry_edit' ? 'admin_content' : $route;
+        return ['cur' => $cur, 'items' => $items];
     }
     return ['cur' => '', 'items' => []];
 }
