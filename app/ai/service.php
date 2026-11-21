@@ -226,8 +226,18 @@ function ai_chat_context(int $uid, string $query, int $limit = 5): array
 
     $q = trim($query);
     $items = [];
+    $usedQ = $q;
     if ($q !== '') {
         $res = search_entries($q, $gids, '', max(1, min($limit, 8)), 0);
+        // 2.3.1：整句问句直接检索，中文二字组覆盖率会被长句稀释，常常 0 命中。
+        // 空了就用拆词后的关键词再搜一轮（与工作台 kb_search 同一套逻辑）。
+        if (empty($res['items']) && function_exists('agent_search_terms')) {
+            $alt = agent_search_terms($q);
+            if ($alt !== '' && $alt !== $q) {
+                $res = search_entries($alt, $gids, '', max(1, min($limit, 8)), 0);
+                $usedQ = $alt;
+            }
+        }
         foreach ((array)($res['items'] ?? []) as $it) {
             $e = (array)($it['entry'] ?? $it);
             if (!empty($e['id'])) {
@@ -237,7 +247,7 @@ function ai_chat_context(int $uid, string $query, int $limit = 5): array
     }
 
     $head = '【知识库检索结果】检索范围：当前账号可读的 ' . count($gids) . ' 个分组（含他人授权给你的）。'
-        . '关键词「' . mb_substr($q, 0, 60, 'UTF-8') . '」命中 ' . count($items) . ' 条。';
+        . '关键词「' . mb_substr($usedQ, 0, 60, 'UTF-8') . '」命中 ' . count($items) . ' 条。';
     if (!$items) {
         return [
             'block' => $head . "\n没有任何命中。涉及具体业务知识时，直接说知识库里没有，不要用你自己的知识补答。",

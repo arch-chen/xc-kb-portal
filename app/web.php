@@ -1492,7 +1492,23 @@ function ctrl_admin_files(): void
             json_out(['ok' => false, 'error' => ['message' => '平台不存在']], 404);
         }
         try {
+            $GLOBALS['__qiniu_host_ok'] = '';
             $msg = provider_driver($p)->probe();
+            // 七牛：如果自动识别出了空间真实所在区域的上传域名，写回配置，
+            // 这样后续真实上传不再撞「域名与区域不匹配」。
+            $auto = trim((string)($GLOBALS['__qiniu_host_ok'] ?? ''));
+            if ($auto !== '' && (string)$p['driver'] === 'qiniu') {
+                $cfg = provider_config($p);
+                if (trim((string)($cfg['auto_host'] ?? '')) !== $auto
+                    || trim((string)($cfg['host'] ?? '')) !== $auto) {
+                    $cfg['auto_host'] = $auto;
+                    $cfg['host'] = $auto;   // 同步填进可见字段，用户编辑时能看到
+                    update_row('storage_providers', (int)$p['id'], [
+                        'config' => secret_encrypt(json_encode($cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+                    ]);
+                    $msg .= '；已自动把「上传加速域名」改为 ' . $auto . '（空间所在区域）';
+                }
+            }
             update_row('storage_providers', (int)$p['id'], [
                 'status' => 'ok', 'last_check_at' => now_str(), 'last_error' => null,
             ]);
@@ -1576,6 +1592,13 @@ function ctrl_admin_files(): void
                 'driver' => $driver,
                 'config' => secret_encrypt(json_encode($cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
             ];
+            // 七牛：auto_host 是「测试连接」自动识别出来的区域域名，不是表单字段。
+            // 表单保存会按白名单重建 cfg，这里把它捞回来，否则用户点一次保存就丢了。
+            if (isset($old['auto_host']) && trim((string)$old['auto_host']) !== ''
+                && trim((string)($cfg['auto_host'] ?? '')) === '') {
+                $cfg['auto_host'] = (string)$old['auto_host'];
+                $data['config'] = secret_encrypt(json_encode($cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            }
             if ($id > 0) {
                 update_row('storage_providers', $id, $data);
                 $pid = $id;

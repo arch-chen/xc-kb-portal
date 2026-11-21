@@ -23,6 +23,17 @@ class StorageQiniu extends StorageDriver
 
     protected function uploadHost(): string
     {
+        // 1) 本次请求里已探测到的真实区域域名
+        $known = trim((string)($this->cfg['__host_ok'] ?? ''));
+        if ($known !== '') {
+            return $known;
+        }
+        // 2) 之前「测试连接」自动识别并写回的域名（比用户手填的默认值更可信）
+        $auto = trim((string)($this->cfg['auto_host'] ?? ''));
+        if ($auto !== '') {
+            return $auto;
+        }
+        // 3) 用户手填 / 默认
         $h = trim((string)$this->opt('host', 'up.qiniup.com'));
         if ($h === '') { $h = 'up.qiniup.com'; }
         $h = preg_replace('#^https?://#i', '', $h) ?? $h;
@@ -96,10 +107,31 @@ class StorageQiniu extends StorageDriver
             'Content-Length: ' . strlen($body),
         ], $body);
 
+        // 2.3.1：七牛在「上传域名和空间区域不匹配」时会回一句
+        //   {"error":"connect refused, please use up-z2.qiniup.com, bucket is in z2"}
+        // 以前我们把这句当通用错误抛给用户，用户只看到「连接失败」，其实七牛已经告诉正确答案。
+        // 这里直接读出来、自动换域名重试一次；成功就用它。
+        $suggest = $this->suggestHostFrom((string)$res['body']);
+        if ($suggest !== '' && $suggest !== $this->uploadHost()) {
+            $res2 = $this->http('POST', 'https://' . $suggest . '/', [
+                'Content-Type: multipart/form-data; boundary=' . $boundary,
+                'Content-Length: ' . strlen($body),
+            ], $body);
+            if ($res2['code'] >= 200 && $res2['code'] < 300) {
+                $d2 = json_decode($res2['body'], true);
+                if (!is_array($d2) || !isset($d2['error'])) {
+                    $this->noteHost($suggest);
+                    return;
+                }
+            }
+            $res = $res2;
+        }
+
         if ($res['code'] >= 200 && $res['code'] < 300) {
             $d = json_decode($res['body'], true);
             if (is_array($d) && isset($d['error'])) {
-                throw new RuntimeException('上传失败：' . (string)$d['error']);
+                throw new RuntimeException('上传失败：' . (string)$d['error']
+                    . '。这是七牛服务端给出的拒绝原因，不是网站自身的网络故障');
             }
             return;
         }
@@ -117,6 +149,34 @@ class StorageQiniu extends StorageDriver
             );
         }
         $this->expect($res, '上传');
+    }
+
+    /**
+     * 从七牛的报错里挖出「应该用哪个上传域名」。
+     * 见过原文：connect refused, please use up-z2.qiniup.com, bucket is in z2
+     * 也兼容 up-z0 / up-z1 / up.qiniup.com 这类写法。
+     */
+    protected function suggestHostFrom(string $body): string
+    {
+        if ($body === '') {
+            return '';
+        }
+        if (preg_match('/\b((?:up|upload)(?:-[a-z0-9]+)?\.qiniup\.com)\b/i', $body, $m)) {
+            return strtolower($m[1]);
+        }
+        if (preg_match('/\b((?:up|upload)(?:-[a-z0-9]+)?\.qiniu\.com)\b/i', $body, $m)) {
+            return strtolower($m[1]);
+        }
+        return '';
+    }
+
+    /** 记住本次请求里探测到的可用上传域名（带下划线前缀，不参与后台表单回填） */
+    protected function noteHost(string $host): void
+    {
+        $this->cfg['__host_ok'] = $host;
+        // 交给上层的「测试连接」把结果写回 provider 配置。
+        // 否则自动识别出的正确域名只在这一次请求里有效，用户真正上传时又撞回错域名。
+        $GLOBALS['__qiniu_host_ok'] = $host;
     }
 
     protected function downloadUrl(string $key): string
@@ -210,9 +270,33 @@ class StorageQiniu extends StorageDriver
         try {
             $this->put($key, $tmp, 'text/plain');
             $this->drop($key);
+        } catch (Throwable $e) {
+            // 2.3.1：把「七牛说该用哪个域名」这件事直接翻译成可操作结论。
+            // 用户看到的旧提示是「连接失败，请检查网络」——误导，实际是空间区域和上传域名不匹配。
+            $msg = $e->getMessage();
+            $suggest = $this->suggestHostFrom($msg);
+            $cur = $this->uploadHost();
+            if ($suggest !== '' && $suggest !== $cur) {
+                throw new RuntimeException(
+                    '上传域名和空间区域不匹配：七牛要求用 ' . $suggest . '，当前填的是 ' . $cur . '。'
+                    . '两种改法：① 到「编辑」把「上传加速域名」改成 ' . $suggest . ' 再测；'
+                    . '② 或者留空不填，系统已支持自动识别并重试。'
+                    . '（原始返回：' . mb_substr($msg, 0, 160, 'UTF-8') . '）'
+                );
+            }
+            if (stripos($msg, 'connect') !== false || stripos($msg, 'refused') !== false
+                || stripos($msg, 'timed out') !== false || stripos($msg, 'resolve') !== false) {
+                throw new RuntimeException(
+                    '连不上七牛上传节点（' . $cur . '）：' . mb_substr($msg, 0, 160, 'UTF-8')
+                    . '。请确认服务器能出网访问 443 端口、DNS 正常；如果是国内主机，'
+                    . '也检查一下是否被安全组 / 防火墙拦了 qiniup.com'
+                );
+            }
+            throw $e;
         } finally {
             @unlink($tmp);
         }
-        return '上传/删除正常：' . $this->uploadHost();
+        return '上传/删除正常：' . $this->uploadHost()
+            . ($this->uploadHost() !== 'up.qiniup.com' ? '（已按空间区域自动匹配）' : '');
     }
 }

@@ -132,35 +132,55 @@ function agent_tool_groups(array $user): array
 {
     $uid = (int)$user['id'];
     $vis = visible_groups($uid);
+
+    // 2.3.1 修正：以前这里只把「可写」的分组放进 groups，可读的只丢一个数字 readable_count。
+    // 结果是「只有读授权」的账号（最常见：别人授权给你、或全站唯一的公共库）拿到 groups=[]，
+    // 模型就断言「没有任何知识库」直接放弃检索——明明可读 1 个分组、2149 条都在。
+    // 现在 groups 列全部可读分组，用 writable 区分能不能写。
     $rows = [];
+    $writable = 0;
     foreach ($vis as $g) {
-        $w = can_write_group($uid, (int)$g['id']);
-        if (!$w) {
-            continue;
+        $gid = (int)$g['id'];
+        $w = can_write_group($uid, $gid);
+        if ($w) {
+            $writable++;
         }
         $rows[] = [
-            'id'    => (int)$g['id'],
-            'name'  => (string)$g['name'],
-            'count' => (int)val('SELECT COUNT(*) FROM ' . tbl('entries') . ' WHERE group_id = ? AND status = 1', [(int)$g['id']], 0),
+            'id'       => $gid,
+            'name'     => (string)$g['name'],
+            'count'    => (int)val('SELECT COUNT(*) FROM ' . tbl('entries') . ' WHERE group_id = ? AND status = 1', [$gid], 0),
+            'writable' => $w,
         ];
     }
-    // 可写只是能往里写；能读的范围通常更大（含他人授权的分组），回答问题时都要覆盖
-    $readable = array_map(fn($g) => (string)$g['name'], $vis);
+
+    $total = 0;
+    foreach ($rows as $r) {
+        $total += (int)$r['count'];
+    }
     $data = [
         'groups'         => $rows,
-        'readable_count' => count($readable),
-        'readable'       => array_slice($readable, 0, 12),
-        'note'           => 'groups 是你能写的分组；检索范围是可读的 ' . count($readable) . ' 个分组',
+        'readable_count' => count($rows),
+        'writable_count' => $writable,
+        'entries_total'  => $total,
+        'note'           => 'groups 是你能检索的全部分组（writable=false 是只读，只能查不能写）。'
+            . '共 ' . count($rows) . ' 个分组 / ' . $total . ' 条内容，kb_search 默认就检索这些。',
     ];
+
     if (!$rows) {
-        return agent_tool_result(true, 'kb_groups', '我目前没有可写的分组（需要先 kb_group_create 新建）；但可读的有 '
-            . count($readable) . ' 个，检索仍覆盖它们', $data);
+        return agent_tool_result(
+            true,
+            'kb_groups',
+            '这个账号目前没有任何可读的分组，所以检索不到内容。需要管理员在「管理后台 → 分组管理」给你授权，'
+            . '或你自己 kb_group_create 新建一个。',
+            $data
+        );
     }
-    $names = array_map(fn($r) => $r['name'] . '(' . $r['id'] . ')', $rows);
-    $msg = '可写分组 ' . count($rows) . ' 个：' . implode('、', array_slice($names, 0, 8));
-    if (count($readable) > count($rows)) {
-        $msg .= '。另有 ' . (count($readable) - count($rows)) . ' 个只读分组也在我能检索的范围内';
-    }
+
+    $names = array_map(fn($r) => $r['name'] . '(' . $r['id'] . '，' . $r['count'] . ' 条'
+        . ($r['writable'] ? '' : '，只读') . ')', $rows);
+    $msg = '可检索 ' . count($rows) . ' 个分组 / 共 ' . $total . ' 条内容：'
+        . implode('、', array_slice($names, 0, 8))
+        . '。其中 ' . $writable . ' 个可写。';
     return agent_tool_result(true, 'kb_groups', $msg, $data);
 }
 
@@ -175,18 +195,35 @@ function agent_tool_search(array $user, array $args): array
     $limit = $limit > 0 ? min($limit, 20) : 10;
 
     $gids = [];
-    foreach (visible_groups($uid) as $g) {
-        $gids[] = (int)$g['id'];
-    }
-    if (!$gids) {
-        return agent_tool_result(false, 'kb_search', '我没有可读的分组');
-    }
-    $res = search_entries($query, $gids, '', $limit, 0);
-    $items = [];
     $gnames = [];
     foreach (visible_groups($uid) as $g) {
+        $gids[] = (int)$g['id'];
         $gnames[(int)$g['id']] = (string)$g['name'];
     }
+    if (!$gids) {
+        return agent_tool_result(
+            false,
+            'kb_search',
+            '这个账号没有任何可读的分组，检索不到内容。需要管理员在「管理后台 → 分组管理」授权。'
+        );
+    }
+
+    // 2.3.1：模型常把「帮我看下 wayfair 知识库里关于积分套餐的内容」整句丢进来。
+    // 中文二字组覆盖率一被长句稀释就召回为空，于是出现「2149 条在库里却说查不到」的假象。
+    // 先按原句搜，空了就拆词再搜一轮，把「检索式」这件事从模型手里接管过来。
+    $res = search_entries($query, $gids, '', $limit, 0);
+    $usedQuery = $query;
+    $fallback = '';
+    if (empty($res['items'])) {
+        $alt = agent_search_terms($query);
+        if ($alt !== '' && $alt !== $query) {
+            $res = search_entries($alt, $gids, '', $limit, 0);
+            $usedQuery = $alt;
+            $fallback = $alt;
+        }
+    }
+
+    $items = [];
     foreach ((array)($res['items'] ?? []) as $it) {
         $e = (array)($it['entry'] ?? $it);
         $q = trim((string)($e['question'] ?? ''));
@@ -200,9 +237,106 @@ function agent_tool_search(array $user, array $args): array
         ];
     }
     $msg = $items
-        ? '「' . $query . '」在 ' . count($gids) . ' 个可读分组里命中 ' . count($items) . ' 条'
-        : '「' . $query . '」在 ' . count($gids) . ' 个可读分组里没命中任何条目（知识库里没有，别用训练知识补）';
-    return agent_tool_result(true, 'kb_search', $msg, ['query' => $query, 'scope_groups' => count($gids), 'items' => $items]);
+        ? '「' . $usedQuery . '」在 ' . count($gids) . ' 个可读分组里命中 ' . count($items) . ' 条'
+        . ($fallback !== '' ? '（原句太长已自动拆词检索，命中最相关的几条）' : '')
+        : '「' . $query . '」在 ' . count($gids) . ' 个可读分组 / '
+        . (int)val('SELECT COUNT(*) FROM ' . tbl('entries') . ' WHERE status = 1 AND group_id IN ('
+            . implode(',', array_fill(0, count($gids), '?')) . ')', $gids, 0)
+        . ' 条内容里都没命中。换个更短的关键词再试一次（比如只留名词，别带「帮我查一下」这类话）';
+    return agent_tool_result(true, 'kb_search', $msg, [
+        'query' => $query,
+        'used_query' => $usedQuery,
+        'scope_groups' => count($gids),
+        'items' => $items,
+    ]);
+}
+
+/**
+ * 从一整句自然语言里挑出可检索的关键词。
+ *
+ * 中文检索按「二字组覆盖率」算分：句子越长、废话越多，真业务词的覆盖率越低，
+ * 最后就被阈值筛掉 → 2149 条在库里也召回为空。所以整句不能直接拿去搜。
+ *
+ * 做法（零依赖、不引入分词库）：把提问话术当停用片段从**句中任意位置**删掉，
+ * 剩下的就是实词串；再按空白/标点切一下，取最长的那段。
+ * 「帮我看下 wayfair 知识库里关于积分套餐的内容」→「wayfair 积分套餐」→ 取「积分套餐」。
+ */
+function agent_search_terms(string $q): string
+{
+    $s = trim($q);
+    if ($s === '') {
+        return '';
+    }
+
+    // 提问话术 / 虚词：出现在句首、句中、句尾都要清掉。长词在前，避免「帮我看下」被「看下」先吃掉半截。
+    $stop = [
+        '帮我看看', '帮我看一下', '帮我看下', '帮我查一下', '帮我查下', '帮我找一下', '帮我找下',
+        '帮忙看看', '帮忙看一下', '帮忙查一下', '帮忙找一下', '麻烦你', '麻烦帮我', '麻烦问下', '麻烦',
+        '我想知道', '我想了解', '我想问', '想问一下', '想问下', '请问一下', '请问', '问一下', '问下',
+        '能不能帮我', '能不能', '可不可以', '可以帮我', '请帮我', '帮我', '给我看看', '给我',
+        '在知识库里', '知识库里', '知识库中', '知识库', '资料库里', '资料库', '库里',
+        '有没有', '是否有', '有关于', '关于', '有关', '相关',
+        '看看', '看一下', '看下', '查查', '查看', '查一下', '查下', '搜索一下', '搜索', '检索',
+        '大体方向', '方向', '大概', '大致', '的内容', '的相关内容', '的资料', '的相关资料',
+        '的问答', '的答案', '的回答', '的信息', '的问题', '的情况',
+        '是什么', '有哪些', '有什么', '是多少', '怎么办', '怎么会', '怎么处理', '怎么样',
+        '怎么算', '怎么预约', '怎么操作', '怎么弄', '怎样', '怎么', '如何', '为什么',
+        '一下', '谢谢', '多谢', '帮忙',
+        '吗', '呢', '吧', '啊', '呀', '哦', '了', '的',
+    ];
+    // 长词优先，保证「帮我看一下」先于「看一下」被删
+    usort($stop, fn($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+
+    $changed = true;
+    $guard = 0;
+    while ($changed && $guard++ < 30) {
+        $changed = false;
+        foreach ($stop as $w) {
+            if ($w !== '' && str_contains($s, $w)) {
+                $s = str_replace($w, ' ', $s);
+                $changed = true;
+            }
+        }
+    }
+
+    // 按空白与标点切开，挑信息量最大的那段。
+    // 单纯比长度会选错：「wayfair 积分套餐」里 wayfair 是 7 个字母但只是品牌名，
+    // 真正的检索目标是中文实词串。所以先按「含中文的段优先」，再在里面比长度。
+    $parts = preg_split('/[\s,，。、；;：:！!？?~～\-—_\/|]+/u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $best = '';
+    $bestScore = -1;
+    foreach ($parts as $p) {
+        $p = trim($p);
+        if ($p === '') {
+            continue;
+        }
+        $cn = preg_match_all('/[\x{4e00}-\x{9fa5}]/u', $p, $mm) ?: 0;
+        // 中文段权重高；纯英文段只在没有中文段时才可能被选中
+        $score = $cn > 0 ? 1000 + $cn : mb_strlen($p);
+        if ($score > $bestScore) {
+            $bestScore = $score;
+            $best = $p;
+        }
+    }
+    // 中文实词串如果太短（比如只剩「积分」两个字），把带品牌名的段也拼回去更利于召回
+    if ($best !== '' && mb_strlen($best) <= 4) {
+        foreach ($parts as $p) {
+            $p = trim($p);
+            if ($p !== '' && $p !== $best && !str_contains($best, $p) && mb_strlen($p) > 2) {
+                $best = $best . ' ' . $p;
+                break;
+            }
+        }
+    }
+    if ($best === '') {
+        // 全被停用词吃光了（例如只问了「怎么弄」），退回原句，交给检索层自己处理
+        $best = trim($q);
+    }
+    // 仍然过长就截前 20 字：二字组检索超过这个长度基本只剩稀释
+    if (mb_strlen($best) > 20) {
+        $best = mb_substr($best, 0, 20);
+    }
+    return trim($best);
 }
 
 function agent_tool_get(array $user, array $args): array
