@@ -68,6 +68,20 @@ function ai_run(int $uid, int $modelId, string $action, array $messages, array $
     if (!$user) {
         throw new AiError('forbidden', '用户不存在或已停用');
     }
+    // 回答前门禁（2.2.5）：先判断所选模型是「积分扣除」还是「自定义接入」，
+    // 连「没选模型 / 模型不存在」也在这里给出可操作的引导卡片。
+    // 不通过就直接交回会话窗口——不预扣、不调用、不记失败日志；
+    // 这一步只做只读判断，真正的扣费 / 退款仍在下面，铁律不变。
+    $guide = ai_preflight($uid, $user, $modelId);
+    if ($guide !== null) {
+        $kind = match ($guide['code']) {
+            'insufficient'      => 'insufficient',
+            'no_model', 'bad_config' => 'bad_config',
+            default             => 'forbidden',
+        };
+        throw new AiError($kind, $guide['title'] . '：' . $guide['message'], 0, $guide);
+    }
+
     $model = ai_model_get($modelId);
     if (!$model) {
         throw new AiError('bad_config', '模型不存在，请重新选择');
@@ -77,7 +91,8 @@ function ai_run(int $uid, int $modelId, string $action, array $messages, array $
     $chk = ai_can_use_model($user, $model, $ent);
     if (!$chk['ok']) {
         $kind = str_contains($chk['reason'], '积分不足') ? 'insufficient' : 'forbidden';
-        throw new AiError($kind, $chk['reason']);
+        $g = ai_preflight($uid, $user, $modelId) ?? [];
+        throw new AiError($kind, $chk['reason'], 0, $g);
     }
 
     $price = $chk['free'] ? 0 : (int)$model['credits'];
@@ -86,7 +101,8 @@ function ai_run(int $uid, int $modelId, string $action, array $messages, array $
             'model_id' => (int)$model['id'], 'ref_type' => 'action', 'note' => 'AI：' . $action,
         ]);
         if (!$hold['ok']) {
-            throw new AiError('insufficient', $hold['error']);
+            $g = ai_preflight($uid, $user, $modelId) ?? [];
+            throw new AiError('insufficient', $hold['error'], 0, $g);
         }
     }
 
@@ -101,6 +117,10 @@ function ai_run(int $uid, int $modelId, string $action, array $messages, array $
             ]);
         }
         ai_log_call($uid, $model, $action, $ctx, ['in' => 0, 'out' => 0], 0, $ms, 'fail', $e->getMessage());
+        // 模型真的调了但没成功：把「接口为什么不通」翻成人话 + 排查入口，一并交给会话窗口。
+        if ($e instanceof AiError && $e->guide === []) {
+            $e->withGuide(ai_guide_from_error($e, $model, $user));
+        }
         throw $e;
     }
 

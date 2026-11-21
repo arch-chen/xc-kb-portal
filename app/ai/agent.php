@@ -94,6 +94,18 @@ function agent_msg_add(int $runId, string $role, string $content, array $extra =
     return $row;
 }
 
+/**
+ * 落一条「引导卡片」消息（2.2.5）。
+ * 门禁拦截 / 模型接口不通时，把结构化引导存进会话，前端照着渲染按钮。
+ * 这样刷新后仍在、也不会因为最后一条是 user 而触发自动续跑。
+ */
+function agent_guide_msg_add(int $runId, array $guide): array
+{
+    return agent_msg_add($runId, 'guide', json_encode($guide, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), [
+        'status' => 'guide',
+    ]);
+}
+
 /** 消息行 → 前端用的结构（say/action 现场解析，库里只存原始输出） */
 function agent_msg_public(array $m): array
 {
@@ -105,6 +117,11 @@ function agent_msg_public(array $m): array
         'time'    => (string)$m['created_at'],
         'ok'      => (int)$m['ok'] === 1,
     ];
+    if ($role === 'guide') {
+        $g = json_decode((string)$m['content'], true);
+        $out['guide'] = is_array($g) ? $g : null;
+        return $out;
+    }
     if ($role === 'assistant') {
         $act = agent_parse_action((string)$m['content']);
         $out['say'] = $act['say'] !== '' ? $act['say'] : trim((string)$m['content']);
@@ -313,6 +330,10 @@ function agent_build_messages(array $run, array $msgs): array
     $tail = array_slice($msgs, -AGENT_HISTORY_MAX);
     $n = count($tail);
     foreach ($tail as $i => $m) {
+        // guide 是给前端画卡片的 JSON，不是对话内容，别喂给模型
+        if ((string)$m['role'] === 'guide') {
+            continue;
+        }
         $content = trim((string)$m['content']);
         if ($content === '') {
             continue;
@@ -360,7 +381,26 @@ function agent_step(int $uid, array $user, int $runId, int $modelId): array
     $msgs = agent_msgs($runId);
     $messages = agent_build_messages($run, $msgs);
 
-    $r = ai_run($uid, $modelId, 'agent', $messages, ['run_id' => $runId], ['max_tokens' => 2600, 'temperature' => 0.2]);
+    try {
+        $r = ai_run($uid, $modelId, 'agent', $messages, ['run_id' => $runId], ['max_tokens' => 2600, 'temperature' => 0.2]);
+    } catch (AiError $e) {
+        // 门禁拦截（积分不足 / 套餐 / 配置）/ 模型接口不通：
+        // 落一条 guide 占位消息并收尾本轮（刷新时不会因「最后一条是 user」而自动续跑），
+        // 同时把 guide 原样返回给前端，由会话窗口顶部的「门禁卡片」统一显示。
+        if ($e->guide !== []) {
+            $gm = agent_guide_msg_add($runId, $e->guide);
+            agent_run_patch($runId, ['status' => 'done']);
+            return [
+                'status'  => 'guide',
+                'msgs'    => [agent_msg_public($gm)],
+                'guide'   => $e->guide,
+                'step'    => $steps,
+                'credits' => (int)$run['credits'],
+                'balance' => ai_balance($uid),
+            ];
+        }
+        throw $e;
+    }
     $act = agent_parse_action($r['text']);
 
     // 模型输出原样存一条 assistant（回灌时用它保持上下文一致）

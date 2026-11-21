@@ -105,6 +105,7 @@ $isAdmin = $u ? is_admin($u) : false;
   </main>
 </div>
 <script src="<?= e(asset('app.js')) ?>?v=<?= e(asset_ver('app.js')) ?>"></script>
+<script src="<?= e(asset('ai-guide.js')) ?>?v=<?= e(asset_ver('ai-guide.js')) ?>"></script>
 <script src="<?= e(asset('agent-side.js')) ?>?v=<?= e(asset_ver('agent-side.js')) ?>"></script>
 </body>
 </html>

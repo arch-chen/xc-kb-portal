@@ -13,13 +13,24 @@ declare(strict_types=1);
 
 class AiError extends RuntimeException
 {
-    /** auth | rate | quota | timeout | network | bad_response | bad_config */
+    /** auth | rate | quota | timeout | network | bad_response | bad_config | insufficient | forbidden */
     public string $kind;
 
-    public function __construct(string $kind, string $message, int $code = 0)
+    /** @var array 会话窗口引导卡片（gate.php 生成）；空数组 = 没有引导，前端按普通错误显示 */
+    public array $guide = [];
+
+    public function __construct(string $kind, string $message, int $code = 0, array $guide = [])
     {
         parent::__construct($message, $code);
         $this->kind = $kind;
+        $this->guide = $guide;
+    }
+
+    /** 挂上引导卡片后原样抛出，保持异常链 */
+    public function withGuide(array $guide): self
+    {
+        $this->guide = $guide;
+        return $this;
     }
 }
 

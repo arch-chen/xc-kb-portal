@@ -72,6 +72,9 @@ foreach ($models as $m) {
       <div class="ai-cost" id="aiCostBox"></div>
     </div>
 
+    <!-- 回答前的「计费 / 模型门禁」状态位：三个功能共用同一个模型选择 -->
+    <div class="ai-gate" id="aiGate" hidden></div>
+
     <div class="ai-tabs" id="aiTabs">
       <button type="button" data-pane="chat" class="on">对话</button>
       <button type="button" data-pane="polish">优化答案</button>
@@ -192,8 +195,10 @@ foreach ($models as $m) {
 <script>
 (function () {
   var base = <?= json_encode($base, JSON_UNESCAPED_UNICODE) ?>;
-  var csrf = <?= json_encode($csrf) ?>;
+  var csrf = <?= json_encode($csrf, JSON_UNESCAPED_UNICODE) ?>;
   var prices = <?= json_encode(array_map(fn($m) => ['id' => (int)$m['id'], 'credits' => (int)$m['credits'], 'self' => (int)$m['owner_id'] > 0, 'name' => (string)$m['name']], $models), JSON_UNESCAPED_UNICODE) ?>;
+  // 进页面就先算好的门禁状态：积分扣除看余额，自定义接入看配置 / 套餐
+  var initialGuide = <?= json_encode($initialGuide ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
   function $(s, r) { return (r || document).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
@@ -221,6 +226,47 @@ foreach ($models as $m) {
   }
   function setBal(v) { var el = $('#aiBal'); if (el && typeof v !== 'undefined') { el.textContent = v; } }
   function err(sel, msg) { var el = $(sel); if (el) { el.textContent = msg || ''; } }
+
+  /* ---------- 计费 / 模型门禁：回答前先判断两种模式 ---------- */
+  var gateBox = $('#aiGate');
+  var preflightSeq = 0;
+
+  function showGate(g) {
+    if (!gateBox) { return; }
+    gateBox.innerHTML = '';
+    if (!g || !g.title || !window.KBGuide) { gateBox.hidden = true; return; }
+    var node = window.KBGuide.render(g, { onSwitch: switchModel });
+    if (!node) { gateBox.hidden = true; return; }
+    gateBox.appendChild(node);
+    gateBox.hidden = false;
+  }
+
+  function switchModel(id, name) {
+    var sel = $('#aiModel');
+    if (sel) { sel.value = String(id); }
+    paintCost();
+    runPreflight();
+  }
+
+  function runPreflight() {
+    if (!gateBox) { return; }
+    var seq = ++preflightSeq;
+    post('preflight', { model_id: modelId() })
+      .then(function (d) {
+        if (seq !== preflightSeq || !d.ok) { return; }
+        showGate(d.data && d.data.guide ? d.data.guide : null);
+      })
+      .catch(function () { /* 预检失败不打断，真正提交时后端会再判断 */ });
+  }
+
+  /** 三个功能共用的错误出口：有引导卡片就画卡片（带入口 / 报错原因），否则显示红字 */
+  function fail(sel, d, e) {
+    var g = (e && e.guide) || (d && d.error && d.error.guide) || null;
+    if (g && g.title) { showGate(g); err(sel, ''); return; }
+    var msg = (e && e.message) || (d && d.error && d.error.message) || '失败';
+    err(sel, msg);
+  }
+
   function fmt(r) {
     var bits = [];
     if (r.credits) { bits.push('本次扣 ' + r.credits + ' 积分'); }
@@ -230,7 +276,12 @@ foreach ($models as $m) {
   }
 
   var sel = $('#aiModel');
-  if (sel) { sel.addEventListener('change', paintCost); paintCost(); }
+  if (sel) {
+    sel.addEventListener('change', function () { paintCost(); runPreflight(); });
+    paintCost();
+  }
+  // 首屏门禁：进页面立刻显示（服务端已判断好），三个功能共用
+  showGate(initialGuide);
 
   $$('#aiTabs button').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -276,12 +327,14 @@ foreach ($models as $m) {
       chatSend.textContent = '思考中…';
       post('chat', { model_id: modelId(), text: t, history: JSON.stringify(history.slice(-10)) })
         .then(function (d) {
-          if (!d.ok) { err('#chatErr', d.error && d.error.message); bubble('助手', '（失败）' + ((d.error && d.error.message) || ''), false); return; }
+          if (!d.ok) { fail('#chatErr', d, null); return; }
+          showGate(null); // 真的答出来了，收起旧门禁卡片
           bubble('助手', d.data.text, false);
           history.push({ role: 'user', content: t }, { role: 'assistant', content: d.data.text });
           setBal(d.data.balance);
+          runPreflight(); // 余额可能已扣，重新判断当前模型还能不能继续用
         })
-        .catch(function (e) { err('#chatErr', e.message); })
+        .catch(function (e) { fail('#chatErr', null, e); })
         .finally(function () { chatSend.disabled = false; chatSend.textContent = '发送'; });
     };
     chatSend.addEventListener('click', send);
@@ -303,15 +356,17 @@ foreach ($models as $m) {
       polishSend.disabled = true; polishSend.textContent = '优化中…';
       post('polish', { model_id: modelId(), entry_id: eid || '0', text: txt })
         .then(function (d) {
-          if (!d.ok) { err('#polishErr', (d.error && d.error.message) || '失败'); return; }
+          if (!d.ok) { fail('#polishErr', d, null); return; }
+          showGate(null);
           $('#polishOut').textContent = d.data.text;
           $('#polishActions').style.display = '';
           $('#polishNote').textContent = fmt(d.data);
           $('#polishWrite').style.display = d.data.entry_id ? '' : 'none';
           $('#polishWrite').setAttribute('data-entry', d.data.entry_id || '');
           setBal(d.data.balance);
+          runPreflight();
         })
-        .catch(function (e) { err('#polishErr', e.message); })
+        .catch(function (e) { fail('#polishErr', null, e); })
         .finally(function () { polishSend.disabled = false; polishSend.textContent = '开始优化'; });
     });
 
@@ -346,8 +401,10 @@ foreach ($models as $m) {
       exSend.disabled = true; exSend.textContent = '生成中…';
       post('extract', { model_id: modelId(), text: t, max: $('#exMax').value || '8' })
         .then(function (d) {
-          if (!d.ok) { err('#exErr', (d.error && d.error.message) || '失败'); return; }
+          if (!d.ok) { fail('#exErr', d, null); return; }
+          showGate(null);
           setBal(d.data.balance);
+          runPreflight();
           var items = d.data.items || [];
           if (!items.length) {
             $('#exList').innerHTML = '<div class="hint">没抽出可用的问答对。模型的原始输出：<pre class="mono tiny" style="white-space:pre-wrap">'
@@ -379,7 +436,7 @@ foreach ($models as $m) {
             $('#exList').appendChild(card);
           });
         })
-        .catch(function (e) { err('#exErr', e.message); })
+        .catch(function (e) { fail('#exErr', null, e); })
         .finally(function () { exSend.disabled = false; exSend.textContent = '生成草稿'; });
     });
   }

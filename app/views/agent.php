@@ -70,6 +70,9 @@ $GLOBALS['agent_run_id'] = $runId;
       <?php endif; ?>
     </header>
 
+    <!-- 会话窗口内的「计费 / 模型门禁」状态位：进页面 / 切换模型 / 被拦截时自动显示引导卡片 -->
+    <div class="ag-gate" id="agGate" hidden></div>
+
     <div class="agent-log" id="agLog"></div>
 
     <div class="agent-tip" id="agTip">
@@ -97,6 +100,8 @@ $GLOBALS['agent_run_id'] = $runId;
   var runId = <?= $runId ?>;
   var groupTpl = <?= $js(u('g', ['slug' => '__SLUG__'])) ?>;
   var initial = <?= $js($msgs) ?>;
+  // 服务端进页面就先算好的门禁（所选模型是积分扣除还是自定义接入、余额够不够）
+  var initialGuide = <?= $js($initialGuide ?? null) ?>;
   var examples = [
     '你会做什么？能操作知识库的哪些功能？',
     '把这个页面采集回来，整理成问答存进新建的分组 https://',
@@ -131,7 +136,12 @@ $GLOBALS['agent_run_id'] = $runId;
     }).then(function (r) {
       return r.json().catch(function () { throw new Error('服务器返回异常（HTTP ' + r.status + '）'); });
     }).then(function (d) {
-      if (!d.ok) { throw new Error((d.error && d.error.message) || '请求失败'); }
+      if (!d.ok) {
+        var er = new Error((d.error && d.error.message) || '请求失败');
+        er.guide = (d.error && d.error.guide) || null;
+        er.code = (d.error && d.error.code) || '';
+        throw er;
+      }
       return d.data;
     });
   }
@@ -140,6 +150,12 @@ $GLOBALS['agent_run_id'] = $runId;
 
   /* ---------- 消息渲染 ---------- */
   function renderMsg(m) {
+    if (m.role === 'guide') {
+      // 历史里落库的引导卡片（刷新后仍在），用同一套渲染器画
+      var gn = window.KBGuide && m.guide ? window.KBGuide.render(m.guide, { onSwitch: switchModel }) : null;
+      if (gn) { gn.classList.add('ag-guide-inline'); return gn; }
+      return el('div', 'ag-notice', '（这条引导信息无法显示）');
+    }
     if (m.role === 'user') {
       var u = el('div', 'ag-msg me');
       u.appendChild(el('div', 'ag-who', '我'));
@@ -248,9 +264,52 @@ $GLOBALS['agent_run_id'] = $runId;
     }
   }
 
-  function fail(msg) {
-    log.appendChild(el('div', 'ag-err', msg));
+  function fail(msg, guide) {
+    if (guide && guide.title) { showGate(guide); }
+    else { log.appendChild(el('div', 'ag-err', msg)); }
     bottom();
+  }
+
+  /* ---------- 计费 / 模型门禁：回答前先判断两种模式 ---------- */
+  var gateBox = $('#agGate');
+  var lastGateJson = '';
+  var preflightSeq = 0;
+
+  /** 把引导卡片画进会话窗口顶部；g 为空则收起 */
+  function showGate(g) {
+    if (!gateBox) { return; }
+    gateBox.innerHTML = '';
+    if (!g || !g.title || !window.KBGuide) {
+      gateBox.hidden = true;
+      lastGateJson = '';
+      return;
+    }
+    var node = window.KBGuide.render(g, { onSwitch: switchModel });
+    if (!node) { gateBox.hidden = true; return; }
+    gateBox.appendChild(node);
+    gateBox.hidden = false;
+    lastGateJson = JSON.stringify(g);
+  }
+
+  /** 卡片上「切换到 xx 模型」：改下拉 + 重新判断，用户输入不丢 */
+  function switchModel(id, name) {
+    var sel = $('#aiModel');
+    if (sel) { sel.value = String(id); }
+    runPreflight();
+  }
+
+  /** 向后端只做一次只读判断（不扣分、不调模型），按当前选中的模型刷新门禁状态 */
+  function runPreflight() {
+    if (!gateBox) { return; }
+    var sel = $('#aiModel');
+    var mid = sel ? sel.value : '0';
+    var seq = ++preflightSeq;
+    api('preflight', { model_id: mid })
+      .then(function (d) {
+        if (seq !== preflightSeq) { return; } // 丢弃过期响应，避免快速切换时闪回旧卡片
+        showGate(d && d.guide ? d.guide : null);
+      })
+      .catch(function () { /* 预检失败不打断对话，真正发送时后端还会再判断一次 */ });
   }
 
   function paintTitle(t) {
@@ -366,10 +425,24 @@ $GLOBALS['agent_run_id'] = $runId;
   }
 
   function afterStep(d) {
-    appendAll(d.msgs);
+    // 有顶部门禁卡片时，msgs 里那条持久化的 guide 消息就不重复画了
+    var msgs = (d.guide && d.guide.title)
+      ? (d.msgs || []).filter(function (m) { return m.role !== 'guide'; })
+      : d.msgs;
+    appendAll(msgs);
     if (typeof d.balance !== 'undefined') { $('#agBal').textContent = d.balance; }
     paintTitle(d.title);
+    // 后端门禁拦截 / 接口不通：把引导卡片摆到会话窗口顶部，停住这一轮
+    if (d.guide && d.guide.title) {
+      showGate(d.guide);
+      setBusy(false);
+      refreshRuns();
+      bottom();
+      return;
+    }
+    if (d.status === 'guide') { setBusy(false); refreshRuns(); bottom(); return; }
     if (d.status === 'running') {
+      showGate(null);
       setBusy(true, '第 ' + (d.step + 1) + ' 步：思考中…');
       setTimeout(next, 120);
       return;
@@ -378,6 +451,8 @@ $GLOBALS['agent_run_id'] = $runId;
     if (d.status === 'ask') {
       log.appendChild(el('div', 'ag-notice', '助手在等你补充信息，直接回复就行。'));
     }
+    // 这一轮真的跑通了：余额可能已扣，重新判断一次当前模型还能不能继续用
+    runPreflight();
     refreshRuns();
     bottom();
   }
@@ -386,7 +461,7 @@ $GLOBALS['agent_run_id'] = $runId;
     if (!runId) { return; }
     api('step', { run_id: runId, model_id: $('#aiModel').value })
       .then(afterStep)
-      .catch(function (e) { setBusy(false); fail(e.message); });
+      .catch(function (e) { setBusy(false); fail(e.message, e.guide); });
   }
 
   function refreshRuns() {
@@ -402,19 +477,20 @@ $GLOBALS['agent_run_id'] = $runId;
     if (!runId) {
       api('new', { model_id: $('#aiModel').value })
         .then(function (d) { runId = d.run_id; })
-        .catch(function (e) { fail(e.message); })
+        .catch(function (e) { fail(e.message, e.guide); })
         .then(function () { if (runId) { send(); } });
       return;
     }
     var mine = { role: 'user', text: text };
     if ($('.ag-empty')) { log.innerHTML = ''; }
+    showGate(null); // 旧门禁卡片先收起，避免和这一轮的结果并存
     log.appendChild(renderMsg(mine));
     bottom();
     textarea.value = '';
     setBusy(true, '第 1 步：思考中…');
     api('send', { run_id: runId, text: text, model_id: $('#aiModel').value })
       .then(afterStep)
-      .catch(function (e) { setBusy(false); fail(e.message); });
+      .catch(function (e) { setBusy(false); fail(e.message, e.guide); });
   }
 
   $('#agForm').addEventListener('submit', function (e) { e.preventDefault(); send(); });
@@ -461,16 +537,26 @@ $GLOBALS['agent_run_id'] = $runId;
   bindRuns();
 
   /* ---------- 初始化 ---------- */
-  if (initial.length) {
-    appendAll(initial);
+  // 选模型就重新判断（积分扣除 → 看余额；自定义接入 → 看配置 / 套餐）
+  var modelSel = $('#aiModel');
+  if (modelSel) { modelSel.addEventListener('change', runPreflight); }
+  // 首屏门禁：服务端已经判断好，进页面立刻显示，不用等一次往返
+  showGate(initialGuide);
+
+  // 顶部已显示「当前门禁状态」时，历史里落库的 guide 消息不再重复画
+  var initMsgs = initialGuide
+    ? initial.filter(function (m) { return m.role !== 'guide'; })
+    : initial;
+  if (initMsgs.length) {
+    appendAll(initMsgs);
     if (runId) { bottom(); }
   } else if (!runId) {
     emptyState();
   } else {
     log.appendChild(el('div', 'ag-notice', '接着上次说，或者换个说法。'));
   }
-  if (initial.length && initial[initial.length - 1].role === 'user') {
-    // 上一步没跑完就刷新了页面，自动接着跑
+  if (initial.length && initial[initial.length - 1].role === 'user' && !initialGuide) {
+    // 上一步没跑完就刷新了页面，自动接着跑；门禁未通过时不自动续跑，免得刷屏
     setBusy(true, '继续执行…');
     setTimeout(next, 200);
   }

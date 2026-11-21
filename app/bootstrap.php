@@ -30,6 +30,7 @@ require BASE_PATH . '/app/files.php';
 require BASE_PATH . '/app/ai/gateway.php';
 require BASE_PATH . '/app/ai/billing.php';
 require BASE_PATH . '/app/ai/service.php';
+require BASE_PATH . '/app/ai/gate.php';
 require BASE_PATH . '/app/ai/tools.php';
 require BASE_PATH . '/app/ai/agent.php';
 require BASE_PATH . '/app/pay/gateway.php';

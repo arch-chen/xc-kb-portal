@@ -1812,6 +1812,14 @@ function ctrl_ai(): void
             $mid = ai_default_model_id($uid);
         }
         try {
+            if ($do === 'preflight') {
+                // 只判断、不调用、不扣分：前端进页面 / 切换模型时据此动态显示引导卡片
+                $mid = (int)post('model_id', '0');
+                if ($mid <= 0) {
+                    $mid = ai_default_model_id($uid);
+                }
+                json_out(['ok' => true, 'data' => ['guide' => ai_preflight($uid, $u, $mid)]]);
+            }
             if ($do === 'chat') {
                 $hist = json_decode((string)($_POST['history'] ?? '[]'), true);
                 $r = ai_chat_flow($uid, $mid, post('text'), is_array($hist) ? $hist : []);
@@ -1886,18 +1894,25 @@ function ctrl_ai(): void
             }
             throw new RuntimeException('未知操作：' . $do);
         } catch (AiError $e) {
-            json_out(['ok' => false, 'error' => ['code' => $e->kind, 'message' => $e->getMessage()]], ai_http_status($e->kind));
+            $err = ['code' => $e->kind, 'message' => $e->getMessage()];
+            if ($e->guide !== []) {
+                $err['guide'] = $e->guide;
+            }
+            json_out(['ok' => false, 'error' => $err], ai_http_status($e->kind));
         } catch (Throwable $e) {
             json_out(['ok' => false, 'error' => ['code' => 'error', 'message' => $e->getMessage()]], 400);
         }
     }
 
+    $defaultId = ai_default_model_id($uid);
     view('ai', [
         'title'     => 'AI 助手',
         'models'    => ai_models_for($uid),
         'ent'       => ai_entitlement($uid),
         'groups'    => ai_writable_groups($u),
-        'defaultId' => ai_default_model_id($uid),
+        'defaultId' => $defaultId,
+        // 进页面就先判断一次：积分不足 / 自定义模型没配好，会话窗口直接摆出引导卡片
+        'initialGuide' => ai_preflight($uid, $u, $defaultId),
         'calls'     => all('SELECT * FROM ' . tbl('ai_calls') . ' WHERE user_id = ? ORDER BY id DESC LIMIT 15', [$uid]),
     ]);
 }
@@ -1933,6 +1948,14 @@ function ctrl_agent(): void
     if ($do !== '' && is_post()) {
         csrf_check();
         try {
+            if ($do === 'preflight') {
+                // 只判断、不调用、不扣分：前端进页面 / 切换模型时据此动态显示引导卡片
+                $mid = (int)post('model_id', '0');
+                if ($mid <= 0) {
+                    $mid = ai_default_model_id($uid);
+                }
+                json_out(['ok' => true, 'data' => ['guide' => ai_preflight($uid, $u, $mid)]]);
+            }
             if ($do === 'new') {
                 $mid = (int)post('model_id', '0');
                 if ($mid <= 0) {
@@ -1984,6 +2007,8 @@ function ctrl_agent(): void
                     'run_id'  => $rid,
                     'status'  => $r['status'],
                     'msgs'    => $r['msgs'],
+                    // 门禁拦截 / 接口不通时把引导卡片透传给前端，由会话窗口顶部统一显示
+                    'guide'   => $r['guide'] ?? null,
                     'step'    => $r['step'],
                     'credits' => $r['credits'],
                     'balance' => $r['balance'],
@@ -2019,7 +2044,11 @@ function ctrl_agent(): void
 
             throw new RuntimeException('未知操作：' . $do);
         } catch (AiError $e) {
-            json_out(['ok' => false, 'error' => ['code' => $e->kind, 'message' => $e->getMessage()]], ai_http_status($e->kind));
+            $err = ['code' => $e->kind, 'message' => $e->getMessage()];
+            if ($e->guide !== []) {
+                $err['guide'] = $e->guide;
+            }
+            json_out(['ok' => false, 'error' => $err], ai_http_status($e->kind));
         } catch (Throwable $e) {
             json_out(['ok' => false, 'error' => ['code' => 'error', 'message' => $e->getMessage()]], 400);
         }
@@ -2045,14 +2074,23 @@ function ctrl_agent(): void
         }
     }
 
+    $avail = ai_models_for($uid);
+    $availIds = array_map(static fn($m) => (int)$m['id'], $avail);
+    // 会话记住的模型可能已被删除 / 停用，这时回退到默认模型，
+    // 否则下拉没有任何选中项、首屏门禁也会按一个不存在的模型判断。
+    $defaultId = ($cur && in_array((int)$cur['model_id'], $availIds, true))
+        ? (int)$cur['model_id']
+        : ai_default_model_id($uid);
     view('agent', [
         'title'  => 'AI 工作台',
         'runs'   => $runs,
         'run'    => $cur,
         'msgs'   => $msgs,
-        'models' => ai_models_for($uid),
+        'models' => $avail,
         'ent'    => ai_entitlement($uid),
-        'defaultId' => $cur ? (int)$cur['model_id'] : ai_default_model_id($uid),
+        'defaultId' => $defaultId,
+        // 进页面就先判断一次：积分不足 / 自定义模型没配好，会话窗口直接摆出引导卡片
+        'initialGuide' => ai_preflight($uid, $u, $defaultId),
         'maxSteps'  => AGENT_MAX_STEPS,
         'scope'     => ['read' => count($visGroups), 'write' => $writable],
     ]);
