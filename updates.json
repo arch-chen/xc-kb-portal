@@ -2,9 +2,9 @@
     "schema": 1,
     "repo": "arch-chen/xc-kb-portal",
     "branch": "main",
-    "generated_at": "2026-11-21T06:17:42+00:00",
-    "current_src": "2.2.2",
-    "latest": "2.2.2",
+    "generated_at": "2026-11-21T06:34:51+00:00",
+    "current_src": "2.2.3",
+    "latest": "2.2.3",
     "releases": [
         {
             "version": "1.1.0",
@@ -239,6 +239,15 @@
             "zip": "update-2.2.2.zip",
             "sha256": "8e883b503c7df7364cab82cf919daebde5a4e8bf8d1262ff3bcf29aaafde274b",
             "size": 384705
+        },
+        {
+            "version": "2.2.3",
+            "min_version": "2.2.2",
+            "released": "2026-11-21",
+            "notes": "修复七牛云存储上传报 HTTP 401 bad token：uptoken 原来只输出两段 AK:Sign 且对原始 JSON 策略签名，而七牛要求三段 AK:Sign:EncodedPutPolicy、且 Sign 必须对 base64url 编码后的策略串签名；现与官方 SDK 算法一致，上传、测试连接、probe 恢复正常。401 时给出密钥/空间名/服务器时间/上传区域四项排查提示；公开空间下载凭证被拒时自动回退裸 URL；服务器 PHP 缺 CA 根证书时给出 php.ini 配置指引（不静默关闭 TLS 校验）。下载地址签名、QBox 管理 API 签名、域名容错均回归验证。手动上传 zip 的离线升级入口保留，发版仍直推 GitHub。地址与 API 全部不变",
+            "zip": "update-2.2.3.zip",
+            "sha256": "ec7d0364b3f2b981cb70b7fb8232aad2fb3568201a1908697e313d1d7a0bacbe",
+            "size": 386474
         }
     ]
 }

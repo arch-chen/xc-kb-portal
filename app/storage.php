@@ -102,7 +102,16 @@ abstract class StorageDriver
         curl_close($ch);
 
         if ($resp === false) {
-            throw new RuntimeException('网络请求失败：' . ($err !== '' ? $err : '未知错误'));
+            $hint = '';
+            if (stripos($err, 'certificate') !== false || stripos($err, 'SSL') !== false
+                || stripos($err, 'cacert') !== false || stripos($err, 'CA') !== false) {
+                // 国内不少 Windows/宝塔环境 PHP 没配 CA 根证书，云存储会全部卡在这一句。
+                // 这里只给可操作提示，不自动关闭证书校验（上传涉及密钥，不能静默降级）。
+                $hint = '。这通常表示服务器 PHP 缺少 CA 根证书：请在 php.ini 配置 '
+                    . 'curl.cainfo / openssl.cafile 指向 cacert.pem（或让主机商修复），'
+                    . '不要直接关闭 TLS 校验';
+            }
+            throw new RuntimeException('网络请求失败：' . ($err !== '' ? $err : '未知错误') . $hint);
         }
         return ['code' => $code, 'body' => (string)$resp];
     }

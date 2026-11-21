@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 /**
  * 七牛云 Kodo。
- * 上传：表单 POST 到 up.qiniup.com（可换加速域名），token = AK:base64url(HMAC-SHA1(SK, policy))
+ * 上传：表单 POST 到 up.qiniup.com（可换加速域名），
+ *       uptoken = AK:Sign:EncodedPutPolicy（三段；Sign 对 EncodedPutPolicy 签名）
  * 下载：私有空间要带 e + token；token 对「完整 URL（含 e）」再签一次
  * 删除：管理 API rs.qiniuapi.com/delete/{base64url(bucket:key)}
  */
@@ -16,6 +17,7 @@ class StorageQiniu extends StorageDriver
 
     protected function b64url(string $raw): string
     {
+        // 与七牛官方 SDK 的 base64_urlSafeEncode 一致：只替换 +/ ，保留 '=' 填充。
         return str_replace(['+', '/'], ['-', '_'], base64_encode($raw));
     }
 
@@ -44,6 +46,16 @@ class StorageQiniu extends StorageDriver
         return rtrim($d, '/');
     }
 
+    /**
+     * 上传凭证（uptoken）：必须是三段 AK:Sign:EncodedPutPolicy。
+     *
+     *   EncodedPutPolicy = base64url(json_encode(policy))
+     *   Sign             = base64url(HMAC-SHA1(SecretKey, EncodedPutPolicy))
+     *
+     * 注意签名对象是「编码后的策略串」，不是原始 JSON。老实现只输出两段 AK:Sign、
+     * 且对原始 JSON 签名，服务端一律回 401 {"error":"bad token"}。
+     * 与官方 PHP SDK Qiniu\Auth::uploadToken() 保持一致。
+     */
     protected function uploadToken(string $key): string
     {
         $ak = $this->need('ak', 'AccessKey');
@@ -53,7 +65,9 @@ class StorageQiniu extends StorageDriver
             'scope'    => $bucket . ':' . $key,
             'deadline' => time() + 3600,
         ], JSON_UNESCAPED_SLASHES);
-        return $ak . ':' . $this->b64url(hash_hmac('sha1', (string)$policy, $sk, true));
+        $encoded = $this->b64url((string)$policy);
+        $sign = $this->b64url(hash_hmac('sha1', $encoded, $sk, true));
+        return $ak . ':' . $sign . ':' . $encoded;
     }
 
     public function put(string $key, string $file, string $mime): void
@@ -89,6 +103,19 @@ class StorageQiniu extends StorageDriver
             }
             return;
         }
+        if ($res['code'] === 401) {
+            // bad token 最常见是密钥不属于该账号 / 服务器时间偏差 / 上传域名与空间区域不符，
+            // 把实际使用的域名带出来，方便后台直接排查，而不是只丢一句 JSON。
+            $body401 = trim((string)$res['body']);
+            throw new RuntimeException(
+                '上传失败（HTTP 401）：' . ($body401 !== '' ? $body401 : 'bad token')
+                . '。请核对：① AccessKey / SecretKey 是否为同一账号的密钥（重新复制粘贴，勿手输）；'
+                . '② Bucket 填的是七牛控制台的「空间名」而非显示名称；'
+                . '③ 服务器时间是否准确（凭证有效期 1 小时）；'
+                . '④ 当前上传加速域名 = ' . $this->uploadHost() . '（留空即走 up.qiniup.com，'
+                . '华东可用 up-z0.qiniup.com、华北 up-z1、华南 up-z2）'
+            );
+        }
         $this->expect($res, '上传');
     }
 
@@ -96,6 +123,8 @@ class StorageQiniu extends StorageDriver
     {
         $ak = $this->need('ak', 'AccessKey');
         $sk = $this->need('sk', 'SecretKey');
+        // 私有空间下载凭证：对「含 ?e= 的完整 URL」签名，格式 AK:Sign。
+        // 与官方 SDK Auth::privateDownloadUrl() 一致。
         $base = 'https://' . $this->domain() . '/' . ltrim($key, '/') . '?e=' . (time() + 3600);
         $token = $ak . ':' . $this->b64url(hash_hmac('sha1', $base, $sk, true));
         return $base . '&token=' . $token;
@@ -104,6 +133,15 @@ class StorageQiniu extends StorageDriver
     public function fetch(string $key, string $dest): void
     {
         $res = $this->http('GET', $this->downloadUrl($key));
+        // 公开空间不需要下载凭证，个别 CDN 会把 ?e=&token= 当成非法参数拒掉。
+        // 401/403 时退回裸 URL 再试一次；私有空间仍会失败，由 expect() 正常报出。
+        if ($res['code'] === 401 || $res['code'] === 403) {
+            $plain = 'https://' . $this->domain() . '/' . ltrim($key, '/');
+            $retry = $this->http('GET', $plain);
+            if ($retry['code'] >= 200 && $retry['code'] < 300) {
+                $res = $retry;
+            }
+        }
         $this->expect($res, '下载');
         if (@file_put_contents($dest, $res['body']) === false) {
             throw new RuntimeException('写入临时文件失败');
