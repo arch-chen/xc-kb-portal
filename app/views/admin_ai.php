@@ -98,12 +98,11 @@ $yuan = fn(int $cents) => number_format($cents / 100, 2);
 </section>
 
 <section class="panel">
-  <h2 class="panel-title">模型（<?= count($models) ?>）</h2>
-  <div class="hint" style="margin-bottom:10px">
-    <p>系统模型对所有登录用户开放，按「每次调用」扣积分；用户自带模型（右侧标注用户名）不扣积分，走月付套餐。</p>
-    <p><b>常见填法：</b>OpenAI 兼容填到 <code>/v1</code>（如 <code>https://api.deepseek.com/v1</code>）；
-      Anthropic 填 <code>https://api.anthropic.com</code>；Gemini 填 <code>https://generativelanguage.googleapis.com</code>。</p>
-  </div>
+  <?= panel_title('模型（' . count($models) . '）',
+      '<p>系统模型对所有登录用户开放，按「每次调用」扣积分；用户自带模型（右侧标注用户名）不扣积分，走月付套餐。</p>'
+      . '<p><b>常见填法：</b>OpenAI 兼容填到 <code>/v1</code>（如 <code>https://api.deepseek.com/v1</code>）；'
+      . 'Anthropic 填 <code>https://api.anthropic.com</code>；Gemini 填 '
+      . '<code>https://generativelanguage.googleapis.com</code>。</p>') ?>
   <?php if ($models): ?>
     <div class="table-wrap">
       <table class="table">

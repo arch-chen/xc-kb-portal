@@ -20,14 +20,14 @@ if (is_array($ghResult ?? null) && !empty($ghResult['warning'])) {
 }
 ?>
 <section class="panel">
-  <h2 class="panel-title">GitHub 在线更新 <span class="tag">推荐</span></h2>
-  <div class="hint">
-    默认经 <b>GitHub API</b>（<code>api.github.com</code>，国内可达）从公开仓库
-    <code><?= e((string)$ghRepo) ?></code> 的 <code><?= e((string)$ghBranch) ?></code> 分支读取
-    <code>updates.json</code> 清单，按 <code>min_version</code> 自动连升多个版本；每个包都校验 sha256，
-    升级前自动备份数据库，<code>config.php</code> / <code>storage/</code> / <code>data/</code> 不会被覆盖。
-    清单地址：<span class="gh-src mono tiny"><?= e((string)$ghManifestUrl) ?></span>
-  </div>
+  <?= panel_title('GitHub 在线更新',
+      '<p>默认经 <b>GitHub API</b>（<code>api.github.com</code>，国内可达）从公开仓库 '
+      . '<code>' . e((string)$ghRepo) . '</code> 的 <code>' . e((string)$ghBranch) . '</code> 分支读取 '
+      . '<code>updates.json</code> 清单，按 <code>min_version</code> 自动连升多个版本。</p>'
+      . '<p>每个包都校验 sha256；升级前自动备份数据库，'
+      . '<code>config.php</code> / <code>storage/</code> / <code>data/</code> 不会被覆盖。</p>'
+      . '<p class="muted">清单地址：<span class="mono" style="word-break:break-all">'
+      . e((string)$ghManifestUrl) . '</span></p>', '推荐') ?>
 
   <div class="gh-actions">
     <form method="post" action="<?= e(u('admin_system')) ?>" data-gh-busy="正在检查…">
@@ -89,39 +89,27 @@ if (is_array($ghResult ?? null) && !empty($ghResult['warning'])) {
       <form method="post" action="<?= e(u('admin_system')) ?>" class="form">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="gh_settings">
-        <label>更新源通道
+        <label><?= field_label('更新源通道', 'GitHub API 未认证限额 60 次/小时（检查 1 次 + 每个更新包 1 次），正常使用足够；国外服务器可切 raw 通道避免限流。raw.githubusercontent.com 在国内常被墙，别选错。') ?>
           <select name="gh_source">
             <option value="api" <?= $ghSource === 'api' ? 'selected' : '' ?>>GitHub API（推荐 · 国内可达）</option>
             <option value="raw" <?= $ghSource === 'raw' ? 'selected' : '' ?>>raw.githubusercontent.com（国外直连）</option>
             <option value="custom" <?= $ghSource === 'custom' ? 'selected' : '' ?>>自定义镜像</option>
           </select>
         </label>
-        <div class="hint">
-          GitHub API 未认证限额 <b>60 次/小时</b>（检查 1 次 + 每个更新包 1 次），正常使用足够；
-          国外服务器可切 raw 通道避免限流。<code>raw.githubusercontent.com</code> 在国内常被墙，别选错。
-        </div>
         <label>仓库（owner/repo）
           <input type="text" name="gh_repo" value="<?= e((string)$ghRepo) ?>" maxlength="120" class="mono">
         </label>
         <label>分支
           <input type="text" name="gh_branch" value="<?= e((string)$ghBranch) ?>" maxlength="60" class="mono">
         </label>
-        <label>更新源镜像（可选，留空直连 GitHub）
+        <label><?= field_label('更新源镜像（可选，留空直连 GitHub）', '选「自定义镜像」时必填，按 {镜像}/{owner}/{repo}/{分支}/updates.json 拼接（例如 https://mirror.example.com/https://raw.githubusercontent.com）。镜像必须 https，系统会校验解析到公网地址，拒绝内网 / 回环 / 云元数据地址。') ?>
           <input type="text" name="gh_mirror" value="<?= e((string)$ghMirror) ?>" maxlength="240"
                  placeholder="https://mirror.example.com/https://raw.githubusercontent.com" class="mono">
         </label>
-        <div class="hint">
-          选「自定义镜像」时必填，按 <code>{镜像}/{owner}/{repo}/{分支}/updates.json</code> 拼接（例如
-          <code>https://mirror.example.com/https://raw.githubusercontent.com</code>）。镜像必须 https，
-          系统会校验解析到公网地址，拒绝内网 / 回环 / 云元数据地址。
-        </div>
         <label class="check-line">
           <input type="checkbox" name="gh_ssl_verify" value="1" <?= $ghSslVerify ? 'checked' : '' ?>>
-          校验 TLS 证书
+          校验 TLS 证书<?= label_tip('仅当服务器缺少 CA 根证书、报 TLS 错误时才关闭；关闭后更新包仍有 sha256 完整性校验兜底。') ?>
         </label>
-        <div class="hint">
-          仅当服务器缺少 CA 根证书、报 TLS 错误时才关闭；关闭后更新包仍有 sha256 完整性校验兜底。
-        </div>
         <div class="form-actions">
           <button class="btn sm" type="submit">保存更新源设置</button>
         </div>
@@ -195,38 +183,37 @@ $nginxFull = nginx_snippet();
     <button type="button" class="btn sm" data-copy="<?= e($nginxFull) ?>">复制完整片段</button>
     <a class="btn sm" href="<?= e(base_url()) ?>/storage/kb.sqlite" target="_blank" rel="noopener">点这里自检（应 404）</a>
   </p>
-  <div class="hint">
-    <p>包内另带 <code>nginx.example.conf</code>（含可选短地址规则），可以只写一行
-      <code>include /站点目录/nginx.example.conf;</code> 代替粘贴。
-      安装向导在装完时也会把这两行再提示一次；完整部署步骤与报错对照表见包内 <code>DEPLOY.md</code>。</p>
-    <p>万一这个地址已经被外部访问过，按「已泄露」处理：改管理员密码、吊销全部 API Key 重建。
-      库里的账号密码是 bcrypt、Key 明文是 AES-GCM 加密（密钥在 <code>config.php</code>），
-      但问答正文与邮箱是明文，泄露即等于内容泄露。</p>
-  </div>
+  <p class="hint">包内另带 <code>nginx.example.conf</code>，也可以只写一行 include 代替粘贴。<?= tip(
+      '<p>该文件含可选短地址规则，写法是 '
+      . '<code>include /站点目录/nginx.example.conf;</code>。'
+      . '安装向导在装完时也会把这两行再提示一次；完整部署步骤与报错对照表见包内 <code>DEPLOY.md</code>。</p>'
+      . '<p class="muted"><b>万一这个地址已经被外部访问过</b>，按「已泄露」处理：改管理员密码、'
+      . '吊销全部 API Key 重建。库里的账号密码是 bcrypt、Key 明文是 AES-GCM 加密（密钥在 '
+      . '<code>config.php</code>），但问答正文与邮箱是明文，泄露即等于内容泄露。</p>', '', '部署补充说明') ?></p>
 </section>
 
 <section class="panel">
-  <h2 class="panel-title">网站基础信息</h2>
-  <div class="hint">
-    这里改的是「站点身份」：名称、副标题、图标、页脚、备案号、联系方式。
-    保存后全站立即生效——包括左侧栏品牌、浏览器标签页标题、登录/注册/找回密码页、
-    开发文档页、支付结果页和所有外发邮件里的站点名。
-  </div>
+  <?= panel_title('网站基础信息', '<p>这里改的是「站点身份」：名称、副标题、图标、页脚、备案号、联系方式。</p>'
+      . '<p>保存后全站立即生效——包括左侧栏品牌、浏览器标签页标题、登录 / 注册 / 找回密码页、'
+      . '开发文档页、支付结果页和所有外发邮件里的站点名。</p>'
+      . '<p class="muted">图标存在 <code>storage/branding/</code>，通过 <code>index.php?r=branding</code> 输出，'
+      . '不经 Web 服务器直链——因为 <code>storage/</code> 在 nginx/Apache 上是被拒绝访问的。'
+      . '只接受 png / jpg / gif / webp（favicon 另加 ico），<b>不收 svg</b>：svg 直链打开会执行脚本。</p>') ?>
   <form method="post" action="<?= e(u('admin_system')) ?>" class="form" enctype="multipart/form-data">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="site_info">
 
     <div class="form row-form">
-      <label>站点名称<span class="field-hint">显示在左侧栏、标签页、邮件里，最多 60 字</span>
+      <label><?= field_label('站点名称', '显示在左侧栏、标签页、邮件里，最多 60 字', '≤60 字') ?>
         <input type="text" name="site_name" value="<?= e((string)$site['name']) ?>" maxlength="60" required>
       </label>
-      <label>副标题<span class="field-hint">登录 / 注册 / 找回密码页名称下面那一行</span>
+      <label><?= field_label('副标题', '登录 / 注册 / 找回密码页，在站点名称下面那一行显示。留空则显示「知识库系统」。', '≤120 字') ?>
         <input type="text" name="site_subtitle" value="<?= e((string)$site['subtitle']) ?>"
                maxlength="120" placeholder="例如：内部知识库 · 仅限团队使用">
       </label>
     </div>
 
-    <label>站点简介<span class="field-hint">一句话说明这个站是干什么的，出现在对外接口与分享摘要里</span>
+    <label><?= field_label('站点简介', '一句话说明这个站是干什么的，出现在对外接口与分享摘要里。也用于 llms.txt 与 OpenAPI 的 info.description。', '≤300 字') ?>
       <input type="text" name="site_desc" value="<?= e((string)$site['desc']) ?>"
              maxlength="300" placeholder="例如：Wayfair 运营问答与文档，支持 REST / MCP / OpenAPI 接入">
     </label>
@@ -234,10 +221,10 @@ $nginxFull = nginx_snippet();
     <div class="settings-sep"></div>
 
     <div class="form row-form">
-      <label>站点图标（logo）<span class="field-hint">显示在左侧栏和登录页，建议正方形 1:1，≤512 KB</span>
+      <label><?= field_label('站点图标（logo）', '显示在左侧栏和登录页。建议正方形 1:1，≤512 KB。上传的是 png / jpg / gif / webp，不收 svg。', '1:1，≤512 KB') ?>
         <input type="file" name="logo_file" accept="image/png,image/jpeg,image/gif,image/webp">
       </label>
-      <label>或者填图片地址<span class="field-hint">不想上传就填外链或站内路径</span>
+      <label><?= field_label('或者填图片地址', '不想上传就填外链或站内路径。填了地址会覆盖上传的文件；想换回上传文件，先点下面「清除」。', '') ?>
         <input type="text" name="logo_url" value="<?= e(site_brand_is_file((string)$site['logo']) ? '' : (string)$site['logo']) ?>"
                maxlength="300" placeholder="https://… 或 /static/logo.png">
       </label>
@@ -253,10 +240,10 @@ $nginxFull = nginx_snippet();
     <?php endif; ?>
 
     <div class="form row-form">
-      <label>浏览器小图标（favicon）<span class="field-hint">标签页上的小图标，png / ico，≤256 KB</span>
+      <label><?= field_label('浏览器小图标（favicon）', '标签页上的小图标，png / ico，≤256 KB。没有设置时浏览器会去请求 /favicon.ico，404 属正常。', 'png / ico') ?>
         <input type="file" name="favicon_file" accept="image/png,image/x-icon,image/jpeg,image/gif,image/webp">
       </label>
-      <label>或者填图片地址
+      <label><?= field_label('或者填图片地址', '不想上传就填外链或站内路径，例如 /favicon.ico。填了地址会覆盖上传的文件。', '') ?>
         <input type="text" name="favicon_url" value="<?= e(site_brand_is_file((string)$site['favicon']) ? '' : (string)$site['favicon']) ?>"
                maxlength="300" placeholder="/favicon.ico">
       </label>
@@ -271,48 +258,42 @@ $nginxFull = nginx_snippet();
 
     <div class="settings-sep"></div>
 
-    <label>登录页公告<span class="field-hint">留空不显示。只在登录页出现，适合放「系统维护」「数据仅限内部」这类提示</span>
+    <label><?= field_label('登录页公告', '留空不显示。只在登录页出现，适合放「系统维护」「数据仅限内部」这类提示。300 字以内，支持换行。', '留空不显示') ?>
       <textarea name="site_announce" rows="2" maxlength="300"
                 placeholder="例如：本站内容仅限团队内部使用，请勿外传。"><?= e((string)$site['announce']) ?></textarea>
     </label>
 
-    <label>页脚版权文字<span class="field-hint">留空则不显示页脚。支持换行</span>
+    <label><?= field_label('页脚版权文字', '留空则不显示页脚。支持换行，会原样输出（已转义）。', '留空不显示') ?>
       <textarea name="site_footer" rows="2" maxlength="300"
                 placeholder="例如：© 2026 Wayfair 运营组 · 内部资料"><?= e((string)$site['footer']) ?></textarea>
     </label>
 
     <div class="form row-form">
-      <label>ICP 备案号
+      <label><?= field_label('ICP 备案号', '填了才在页脚显示。不带「http」前缀，直接写「粤ICP备12345678号-1」这种形式。', '') ?>
         <input type="text" name="site_icp" value="<?= e((string)$site['icp']) ?>"
                maxlength="60" placeholder="例如：粤ICP备12345678号-1">
       </label>
-      <label>备案链接
+      <label><?= field_label('备案链接', '不填则用工信部默认查询地址 https://beian.miit.gov.cn/。', '') ?>
         <input type="text" name="site_icp_url" value="<?= e((string)$site['icp_url']) ?>"
                maxlength="300" placeholder="https://beian.miit.gov.cn/">
       </label>
     </div>
 
     <div class="form row-form">
-      <label>公安备案号
+      <label><?= field_label('公安备案号', '填了才在页脚显示，通常长这样「粤公网安备 44030502001234号」，中间的空格要保留。', '') ?>
         <input type="text" name="site_police" value="<?= e((string)$site['police']) ?>"
                maxlength="60" placeholder="例如：粤公网安备 44030502001234号">
       </label>
-      <label>公安备案链接
+      <label><?= field_label('公安备案链接', '不填则用公安部默认查询地址 https://beian.mps.gov.cn/。', '') ?>
         <input type="text" name="site_police_url" value="<?= e((string)$site['police_url']) ?>"
                maxlength="300" placeholder="https://beian.mps.gov.cn/#/query/webSearch">
       </label>
     </div>
 
-    <label>联系方式<span class="field-hint">显示在页脚，一行文字，例如邮箱或群号</span>
+    <label><?= field_label('联系方式', '显示在页脚，一行文字，例如邮箱、群号或维护人名字。不填则不显示。', '') ?>
       <input type="text" name="site_contact" value="<?= e((string)$site['contact']) ?>"
              maxlength="200" placeholder="例如：维护人 alice@example.com">
     </label>
-
-    <div class="hint">
-      图标存在 <code>storage/branding/</code>，通过 <code>index.php?r=branding</code> 输出，
-      不经 Web 服务器直链——因为 <code>storage/</code> 在 nginx/Apache 上是被拒绝访问的。
-      只接受 png / jpg / gif / webp（favicon 另加 ico），<b>不收 svg</b>：svg 直链打开会执行脚本。
-    </div>
 
     <div class="form-actions">
       <button class="btn primary" type="submit">保存站点信息</button>
@@ -328,29 +309,16 @@ $nginxFull = nginx_snippet();
     <input type="hidden" name="action" value="settings">
     <label class="check-line">
       <input type="checkbox" name="allow_register" value="1" <?= $allowRegister ? 'checked' : '' ?>>
-      允许访客自己注册
+      允许访客自己注册<?= label_tip('开启后登录页会出现「注册新账号」。注册成功立即得到一个私有空间，内容只有本人可见（你可以审计）。关闭后入口隐藏，直接访问注册地址会返回「未开放」。') ?>
     </label>
-    <div class="hint">
-      开启后登录页会出现「注册新账号」。注册成功立即得到一个私有空间，内容只有本人可见（你可以审计）。
-      关闭后入口隐藏，直接访问注册地址会返回「未开放」。
-    </div>
-    <label>同一 IP 每小时最多注册
+    <label><?= field_label('同一 IP 每小时最多注册', '全站每小时上限为 ' . register_hourly_cap() . ' 个新账号（按上限的 5 倍自动算，防止被批量注册）。当前共 ' . (int)$userCount . ' 个账号、' . (int)$spaceCount . ' 个私有空间。', '当前 ' . (int)$userCount . ' 个账号') ?>
       <input type="number" name="register_per_hour" min="1" max="100" value="<?= (int)$perHour ?>" class="tiny-input">
     </label>
-    <div class="hint">
-      当前共 <b><?= (int)$userCount ?></b> 个账号、<b><?= (int)$spaceCount ?></b> 个私有空间。
-      全站每小时上限为 <?= register_hourly_cap() ?> 个新账号（按上限的 5 倍自动算，防止被批量注册）。
-      站点名称已移到上面的「网站基础信息」。
-    </div>
     <div class="settings-sep"></div>
     <label class="check-line">
       <input type="checkbox" name="mcp_enabled" value="1" <?= $mcpEnabled ? 'checked' : '' ?>>
-      开放 MCP 接入（ChatGPT / Claude 连接器、自定义 GPT）
+      开放 MCP 接入<?= label_tip('ChatGPT / Claude 连接器、自定义 GPT 走这个入口。关掉后 /mcp.php 直接返回 403，已有连接立刻失效；Key 和内容都不受影响，随时可以再打开。地址在「我的 API Key」页面查看。') ?>
     </label>
-    <div class="hint">
-      关掉后 <code>/mcp.php</code> 直接返回 403，已有连接立刻失效；Key 和内容都不受影响，随时可以再打开。
-      地址在「我的 API Key」页面查看。
-    </div>
     <div class="form-actions">
       <button class="btn primary" type="submit">保存设置</button>
     </div>

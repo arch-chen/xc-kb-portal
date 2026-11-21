@@ -16,7 +16,7 @@ $notify = (int)($u['notify_mail'] ?? 1) === 1;
   <div class="kv">
     <div><span>账号</span><b class="mono"><?= e($u['username']) ?></b></div>
     <div><span>昵称</span><b><?= e($u['display_name'] ?: $u['username']) ?></b></div>
-    <div><span>角色</span><b><?= $u['role'] === 'admin' ? '管理员<span class="muted tiny">（后台全通；前台与普通用户同权同价）</span>' : '普通用户' ?></b></div>
+    <div><span>角色</span><b><?= $u['role'] === 'admin' ? '管理员 ' . tip_text('后台全通；前台与普通用户同权同价，一样要自己建分组、一样按套餐计费。', '', '角色说明') : '普通用户' ?></b></div>
     <div>
       <span>邮箱</span>
       <b>
@@ -42,19 +42,14 @@ $notify = (int)($u['notify_mail'] ?? 1) === 1;
     <form method="post" action="<?= e(u('account')) ?>" class="form">
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="profile">
-      <label>昵称
+      <label><?= field_label('昵称', '昵称全站唯一，不能和别人重复。它同时是你所有私有知识库的名称前缀（例如「' . nick_of($u) . ' · 售后话术」），改完会自动同步过去。') ?>
         <input type="text" name="display_name" maxlength="40"
                value="<?= e($u['display_name'] ?: $u['username']) ?>">
       </label>
-      <div class="hint">
-        昵称全站唯一，不能和别人重复。它同时是你所有私有知识库的名称前缀
-        （例如「<?= e(nick_of($u)) ?> · 售后话术」），改完会自动同步过去。
-      </div>
       <label class="check-line">
         <input type="checkbox" name="notify_mail" value="1" <?= $notify ? 'checked' : '' ?>>
-        接收站内通知邮件
+        接收站内通知邮件<?= label_tip('关掉后，管理员群发通知时不会发到你的邮箱；验证码、找回密码这类事务邮件不受影响。') ?>
       </label>
-      <div class="hint">关掉后，管理员群发通知时不会发到你的邮箱；验证码、找回密码这类事务邮件不受影响。</div>
       <div class="form-actions">
         <button class="btn primary" type="submit">保存资料</button>
       </div>
@@ -62,7 +57,7 @@ $notify = (int)($u['notify_mail'] ?? 1) === 1;
   </section>
 
   <section class="panel">
-    <h2 class="panel-title">修改密码</h2>
+    <?= panel_title('修改密码', '至少 8 位，不能全是数字。改完不会踢掉当前登录状态，其它设备上的会话也不会失效。') ?>
     <form method="post" action="<?= e(u('account')) ?>" class="form">
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="password">
@@ -75,7 +70,6 @@ $notify = (int)($u['notify_mail'] ?? 1) === 1;
       <label>再输一次新密码
         <input type="password" name="new_password2" autocomplete="new-password" required minlength="8">
       </label>
-      <div class="hint">至少 8 位，不能全是数字。改完不会踢掉当前登录状态。</div>
       <div class="form-actions">
         <button class="btn primary" type="submit">修改密码</button>
       </div>
@@ -95,7 +89,7 @@ $notify = (int)($u['notify_mail'] ?? 1) === 1;
   <form method="post" action="<?= e(u('account')) ?>" class="form">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="email">
-    <label><?= $verified ? '更换邮箱' : '绑定邮箱' ?>
+    <label><?= field_label($verified ? '更换邮箱' : '绑定邮箱', '验证码会发到新地址。验证通过后才算绑定成功——这样别人用别人的邮箱也注册不了你的账号。') ?>
       <input type="email" name="email" id="accEmail" maxlength="190" required
              autocomplete="email" placeholder="you@example.com"
              value="<?= e($email) ?>">
@@ -109,9 +103,6 @@ $notify = (int)($u['notify_mail'] ?? 1) === 1;
                 data-email-from="#accEmail">发送验证码</button>
       </div>
     </label>
-    <div class="hint">
-      验证码会发到上面这个新地址。验证通过后才算绑定成功——这样别人拿别人的邮箱也注册不了你的账号。
-    </div>
     <div class="form-actions">
       <button class="btn primary" type="submit">验证并保存</button>
     </div>
@@ -140,7 +131,7 @@ $notify = (int)($u['notify_mail'] ?? 1) === 1;
     <label>再输一次
       <input type="password" name="new_password2" autocomplete="new-password" required minlength="8">
     </label>
-    <div class="hint">验证码发到 <b><?= e($email) ?></b>，15 分钟内有效。</div>
+    <div class="hint muted tiny">验证码发到 <b><?= e($email) ?></b>，15 分钟内有效。</div>
     <div class="form-actions">
       <button class="btn" type="submit">用验证码修改密码</button>
     </div>

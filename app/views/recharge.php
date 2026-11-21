@@ -42,7 +42,8 @@ $route = 'recharge';
       <label>兑换码<input type="text" name="code" placeholder="KBXXXX-XXXX-XXXX" autocomplete="off" required></label>
       <div style="align-self:flex-end"><button class="btn primary" type="submit">立即兑换</button></div>
     </div>
-    <div class="field-hint">兑换码由管理员生成。一个码只能用一次（部分批次允许多人各用一次）。</div>
+    <div class="field-hint">兑换码由管理员生成，一个码只能用一次。<?=
+      tip_text('部分批次允许多人各用一次：这类码在有效期内可被不同账号分别兑换，同一账号仍然只能用一次。兑换成功后积分与套餐立即生效，可在「账单」里查看记录。', '', '兑换规则') ?></div>
     <?php if ($shopUrl !== ''): ?>
       <div class="redeem-shop">
         <span class="muted">还没有兑换码？</span>
@@ -105,14 +106,13 @@ $route = 'recharge';
     </div>
     <div class="hint" style="margin-top:12px">
       <?php if ($payReady): ?>
-        <p><b>关于付款：</b>选好支付方式后点「去支付」，会在本页弹窗里完成付款（扫码或打开收银台），
-          付完弹窗会自动显示「支付成功」，关掉弹窗即可看到新余额。</p>
-        <p>没有在线支付习惯也可以用兑换码；对公转账等特殊情况联系管理员，由后台把订单标记为已支付。</p>
+        <p>付款会在本页弹窗里完成，付完自动显示「支付成功」。<?=
+          tip_text('没有在线支付习惯也可以用兑换码；对公转账等特殊情况联系管理员，由后台把订单标记为已支付。', '', '付款说明') ?></p>
       <?php elseif ($payEnabled): ?>
         <p><b>在线支付正在配置中。</b>请先用兑换码自助充值，或联系管理员。</p>
       <?php else: ?>
-        <p><b>关于付款：</b>当前没有开启在线支付。下单后会生成一个「待支付」订单，你可以
-          ① 用兑换码自助充值；② 联系管理员付款，由后台把订单标记为已支付，系统自动发放。</p>
+        <p>当前没有开启在线支付，下单后会生成一个「待支付」订单。<?=
+          tip_text('两种完成方式：① 用兑换码自助充值；② 联系管理员付款，由后台把订单标记为已支付，系统自动发放积分与套餐。', '', '付款说明') ?></p>
       <?php endif; ?>
     </div>
   <?php endif; ?>

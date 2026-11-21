@@ -27,7 +27,9 @@ $canAdd = $ent['active'] && ($ent['custom_slots'] === 0 || $ent['custom_used'] <
 <?php endif; ?>
 
 <section class="panel">
-  <h2 class="panel-title">已添加的模型（<?= count($rows) ?> / <?= $ent['active'] ? (int)$ent['custom_slots'] : 0 ?>）</h2>
+  <?= panel_title('已添加的模型（' . count($rows) . ' / ' . ($ent['active'] ? (int)$ent['custom_slots'] : 0) . '）',
+      '<p>每月付套餐可添加的自带模型数量由套餐决定；删掉一个就能再添一个。</p>'
+      . '<p class="muted">这些模型只在 AI 工作台与 AI 助手用到，调用走你自己的额度，不扣本站积分。</p>') ?>
   <?php if (!$rows): ?>
     <p class="muted">还没有。下面表单里填一个就能用，例如 DeepSeek / Kimi / 通义 / 豆包，或本地 Ollama。</p>
   <?php else: ?>
@@ -102,7 +104,15 @@ $canAdd = $ent['active'] && ($ent['custom_slots'] === 0 || $ent['custom_used'] <
 </section>
 
 <section class="panel">
-  <h2 class="panel-title">添加模型</h2>
+  <?= panel_title('添加模型', '<p><b>三种协议怎么填：</b></p>'
+      . '<p>· <b>OpenAI 兼容</b>：地址填到 <code>/v1</code> 为止（如 <code>https://api.deepseek.com/v1</code>），'
+      . '系统自动接 <code>/chat/completions</code>。</p>'
+      . '<p>· <b>Anthropic</b>：地址填 <code>https://api.anthropic.com</code>，'
+      . '模型名如 <code>claude-sonnet-4-20250514</code>。</p>'
+      . '<p>· <b>Gemini</b>：地址填 <code>https://generativelanguage.googleapis.com</code>，'
+      . '模型名如 <code>gemini-2.0-flash</code>，Key 直接填 API Key。</p>'
+      . '<p class="muted">本机 Ollama 填 <code>http://127.0.0.1:11434/v1</code>，Key 随便填一个非空值。'
+      . '<code>max_tokens</code> 与 <code>temperature</code> 留默认即可，调大温度回答会更发散。</p>') ?>
   <?php if (!$canAdd): ?>
     <div class="hint">
       <p><?= $ent['active'] ? '套餐的模型槽位已用完，先删一个或升级套餐。' : '需要先开通月付套餐。' ?></p>
@@ -134,13 +144,5 @@ $canAdd = $ent['active'] && ($ent['custom_slots'] === 0 || $ent['custom_used'] <
       <label>备注<input type="text" name="note" placeholder="给自己看的说明"></label>
       <div class="form-actions"><button class="btn primary" type="submit">添加</button></div>
     </form>
-
-    <div class="hint" style="margin-top:14px">
-      <p><b>三种协议怎么填：</b></p>
-      <p>· <b>OpenAI 兼容</b>：地址填到 <code>/v1</code> 为止（如 <code>https://api.deepseek.com/v1</code>），系统自动接 <code>/chat/completions</code>。<br>
-         · <b>Anthropic</b>：地址填 <code>https://api.anthropic.com</code>，模型名如 <code>claude-sonnet-4-20250514</code>。<br>
-         · <b>Gemini</b>：地址填 <code>https://generativelanguage.googleapis.com</code>，模型名如 <code>gemini-2.0-flash</code>，Key 直接填 API Key。</p>
-      <p>本机 Ollama 填 <code>http://127.0.0.1:11434/v1</code>，Key 随便填一个非空值。</p>
-    </div>
   <?php endif; ?>
 </section>

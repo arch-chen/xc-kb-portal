@@ -12,16 +12,14 @@ $cfgLabels = storage_driver_fields('local'); // 只为拿类型，下面按驱�
 </div>
 
 <section class="panel">
-  <h2 class="panel-title">概览</h2>
+  <?= panel_title('概览', '<p>支持的格式：<code>' . e($exts) . '</code>。'
+      . '刻意不支持 <code>svg/html/php/js</code> 这类能执行脚本的格式。</p>'
+      . '<p class="muted">下载一律走 <code>?r=f&amp;id=</code> 鉴权代理，不暴露对象存储地址，也不生成公开直链。</p>') ?>
   <div class="stat-grid">
     <div class="stat"><div class="stat-n"><?= (int)$stats['files'] ?></div><div class="stat-l">个文件</div></div>
     <div class="stat"><div class="stat-n"><?= e(file_human_size((int)$stats['bytes'])) ?></div><div class="stat-l">总大小</div></div>
     <div class="stat"><div class="stat-n"><?= (int)$stats['replicas'] ?></div><div class="stat-l">可用副本</div></div>
     <div class="stat"><div class="stat-n"><?= (int)$maxMb ?> MB</div><div class="stat-l">单文件上限</div></div>
-  </div>
-  <div class="hint">
-    <p>支持的格式：<code><?= e($exts) ?></code>。刻意不支持 <code>svg/html/php/js</code> 这类能执行脚本的格式。</p>
-    <p>下载一律走 <code>?r=f&amp;id=</code> 鉴权代理，不暴露对象存储地址，也不生成公开直链。</p>
   </div>
 </section>
 
@@ -101,15 +99,16 @@ $cfgLabels = storage_driver_fields('local'); // 只为拿类型，下面按驱�
     <div class="progress"><i id="jobBar" style="width:0%"></i></div>
   </div>
 
-  <div class="hint">
-    <p><b>「同步数据」做什么：</b>把这个平台还缺的文件，从其他有副本的平台拉过来再写一份。
-    只补齐、不删除，可以随时中断，再点一次会接着补（已有的跳过）。</p>
-    <p><b>数据怎么搬：</b>源和目标是<b>同一家云、同一个账号</b>时走「云端直搬」——由目标云自己去源桶取，
-    数据不经过本站、不占服务器磁盘；<b>跨厂商</b>（比如 OSS → COS）没有互认的复制协议，只能走「本地中转」：
-    先落到 <code>storage/tmp</code> 再传上去，处理完立即删除，峰值只占一个文件（≤ 站点上传上限）。
-    中转前会检查磁盘余量，不够就直接报错，不会写坏文件。</p>
-    <p>平台停用后不再接收新文件，历史副本保留，读取时也不会再用它——相当于「先挂着不动」。</p>
-  </div>
+  <p class="hint">「同步数据」只补齐缺失副本，不删除；可随时中断，再点一次接着补。<?= tip(
+      '<p><b>「同步数据」做什么：</b>把这个平台还缺的文件，从其他有副本的平台拉过来再写一份。'
+      . '只补齐、不删除，可以随时中断，再点一次会接着补（已有的跳过）。</p>'
+      . '<p><b>数据怎么搬：</b>源和目标是<b>同一家云、同一个账号</b>时走「云端直搬」——'
+      . '由目标云自己去源桶取，数据不经过本站、不占服务器磁盘；'
+      . '<b>跨厂商</b>（比如 OSS → COS）没有互认的复制协议，只能走「本地中转」：'
+      . '先落到 <code>storage/tmp</code> 再传上去，处理完立即删除，峰值只占一个文件'
+      . '（≤ 站点上传上限）。中转前会检查磁盘余量，不够就直接报错，不会写坏文件。</p>'
+      . '<p class="muted">平台停用后不再接收新文件，历史副本保留，读取时也不会再用它——'
+      . '相当于「先挂着不动」。</p>', '', '同步说明') ?></p>
 </section>
 
 <section class="panel">
@@ -166,11 +165,11 @@ $cfgLabels = storage_driver_fields('local'); // 只为拿类型，下面按驱�
       </div>
     <?php endforeach; ?>
 
-    <div class="hint">
-      <p>密钥类字段（SecretKey / 密码）用 AES-256-GCM 加密存在 <code>settings</code> 库里，页面永不回显；
-      密钥本身是 <code>config.php</code> 的 pepper，库被下载走也解不开。</p>
-      <p>新平台保存后是<b>停用</b>状态：先点「测试连接」，通过再「启用」。</p>
-    </div>
+    <p class="hint">新平台保存后是<b>停用</b>状态：先「测试连接」通过再「启用」。<?= tip(
+        '<p>密钥类字段（SecretKey / 密码）用 AES-256-GCM 加密存在 <code>settings</code> 库里，'
+        . '页面永不回显；密钥本身是 <code>config.php</code> 的 pepper，库被下载走也解不开。</p>'
+        . '<p class="muted">七牛报 401 bad token 时优先查四项：AK/SK 是否同账号、'
+        . 'Bucket 填的是空间名而不是域名、服务器时间是否准、上传域名是否匹配区域。</p>', '', '密钥与排查') ?></p>
 
     <button class="btn primary" type="submit"><?= $edit ? '保存修改' : '添加平台' ?></button>
     <?php if ($edit): ?>
@@ -204,7 +203,9 @@ $cfgLabels = storage_driver_fields('local'); // 只为拿类型，下面按驱�
     <label>选择文件（可多选）
       <input type="file" name="files[]" multiple>
     </label>
-    <div class="hint">单文件上限 <?= (int)$maxMb ?> MB；同时受 PHP 的 <code>upload_max_filesize</code>（当前 <?= e((string)ini_get('upload_max_filesize')) ?>）限制。</div>
+    <div class="hint">单文件上限 <?= (int)$maxMb ?> MB，同时受 PHP 的 <code>upload_max_filesize</code>
+      （当前 <?= e((string)ini_get('upload_max_filesize')) ?>）限制。<?=
+      tip_text('两者取小值生效。如果这里显示的上限比预期小，改 php.ini 的 upload_max_filesize 与 post_max_size 后重启 PHP；站点上限在「文件存储 → 添加平台」下方可调。', '', '上传上限说明') ?></div>
     <button class="btn primary" type="submit">上传</button>
   </form>
   <?php endif; ?>

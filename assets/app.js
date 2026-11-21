@@ -346,6 +346,48 @@
   });
 })();
 
+/* ============ 感叹号提示（全站通用） ============
+   气泡本身是纯 CSS（hover / :focus 显示），这里只补两个 CSS 做不了的细节：
+   1. 提示图标放在 <label> 里时，点它会让复选框或输入框聚焦，必须拦掉默认行为；
+   2. 触屏没有 hover，点一下图标聚焦、点页面其它地方收起。 */
+(function () {
+  function closer(el) {
+    return el && el.closest ? el.closest('.tip') : null;
+  }
+
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    var tip = closer(t);
+    if (!tip) return;
+    // 图标在 label 内：阻止冒泡到 label，避免顺带勾选/聚焦
+    ev.preventDefault();
+    if (document.activeElement === tip) {
+      tip.blur();          // 再点一次收起（触屏）
+    } else {
+      try { tip.focus({ preventScroll: true }); } catch (e) { tip.focus(); }
+    }
+  }, true);
+
+  // 点空白处收起所有聚焦中的气泡
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (t && t.closest && t.closest('.tip')) return;
+    var act = document.activeElement;
+    if (act && act.classList && act.classList.contains('tip')) act.blur();
+  });
+
+  // Esc 收起
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape' && ev.keyCode !== 27) return;
+    var act = document.activeElement;
+    if (act && act.classList && act.classList.contains('tip')) {
+      ev.stopPropagation();
+      act.blur();
+    }
+  }, true);
+})();
+
 /* ============ 抽屉（2.0.4 后台收敛） ============ */
 (function () {
   var lastFocus = null;

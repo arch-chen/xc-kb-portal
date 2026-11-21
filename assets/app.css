@@ -1036,3 +1036,141 @@ html[data-theme="dark"] .side-sub-tag { color: #f0b45c; }
   background: var(--panel); border: 1px solid var(--border);
 }
 .brand-preview .check-line { margin: 0 0 0 auto; }
+
+/* ============ 感叹号提示气泡（全站通用） ============
+   用法一（推荐，走 PHP 助手）：<?= tip('<p>说明</p>') ?>
+   用法二（手写）：<span class="tip" tabindex="0"><span class="tip-mark">?</span>
+                    <span class="tip-pop"><span class="tip-card">说明</span></span></span>
+   显示：hover / 键盘聚焦 / 触屏点一下。纯 CSS，无脚本依赖。
+   注意：气泡里只放「解释」，不要放用户要复制的内容（选中文字时鼠标移出会消失）。 */
+.tip {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-soft); color: var(--muted);
+  font-size: 10.5px; font-weight: 700; line-height: 1;
+  font-style: normal; letter-spacing: 0; text-transform: none;
+  cursor: help; vertical-align: middle;
+  user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.tip:hover, .tip:focus, .tip:focus-visible {
+  border-color: var(--accent); color: var(--accent);
+  background: var(--accent-soft); outline: none;
+}
+.tip-mark { display: block; line-height: 1; transform: translateY(.5px); }
+
+.tip-pop {
+  position: absolute; left: 0; top: 100%; z-index: 80;
+  display: none;
+  padding-top: 8px;                 /* 空隙用 padding 而不是偏移，保住 hover 连通 */
+  width: max-content;
+  max-width: min(360px, calc(100vw - 40px));
+}
+.tip:hover > .tip-pop,
+.tip:focus > .tip-pop,
+.tip:focus-visible > .tip-pop { display: block; }
+
+/* 小箭头单独做成 .tip-pop::after：它画在卡片之上，才能盖住卡片顶边那道线；
+   放在卡片内部会被 overflow:auto 裁掉。 */
+.tip-pop::after {
+  content: ""; position: absolute; left: 4px; top: 4px;
+  width: 8px; height: 8px; transform: rotate(45deg);
+  background: var(--panel); pointer-events: none;
+  border-left: 1px solid var(--border-strong);
+  border-top: 1px solid var(--border-strong);
+}
+
+.tip-card {
+  display: block; text-align: left;
+  background: var(--panel); color: var(--text-2);
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(16, 24, 40, .16);
+  padding: 10px 13px;
+  font-size: 12.5px; line-height: 1.68; font-weight: 400;
+  letter-spacing: 0; text-transform: none;
+  white-space: normal;
+  max-height: min(58vh, 400px); overflow: auto;
+  overscroll-behavior: contain;
+}
+.tip-card p { margin: 0 0 6px; }
+.tip-card p:last-child { margin-bottom: 0; }
+.tip-card b, .tip-card strong { color: var(--text); font-weight: 650; }
+.tip-card code {
+  font-family: var(--mono); font-size: 11.5px;
+  background: var(--bg-soft); border: 1px solid var(--border);
+  border-radius: 5px; padding: 1px 5px; word-break: break-all;
+}
+.tip-card pre {
+  margin: 6px 0; padding: 8px 10px; font-size: 11px; line-height: 1.5;
+  border-radius: 7px; white-space: pre-wrap; word-break: break-all;
+}
+.tip-card pre code { background: none; border: none; padding: 0; }
+.tip-card ul, .tip-card ol { margin: 4px 0 6px; padding-left: 18px; }
+.tip-card li { margin: 2px 0; }
+.tip-card .muted { color: var(--muted); }
+
+/* 靠右对齐：用于表格末列、右侧面板，避免气泡冲出视口 */
+.tip.tip-right .tip-pop { left: auto; right: 0; }
+.tip.tip-right .tip-pop::after { left: auto; right: 4px; }
+/* 向上展开：用于页面底部、表格最后一行 */
+.tip.tip-up .tip-pop { top: auto; bottom: 100%; padding-top: 0; padding-bottom: 8px; }
+.tip.tip-up .tip-pop::after {
+  top: auto; bottom: 4px; transform: rotate(225deg);
+}
+/* 深色主题下阴影更沉一点，浅色背景的箭头不变 */
+html[data-theme="dark"] .tip-card { box-shadow: 0 12px 32px rgba(0, 0, 0, .5); }
+
+/* 触屏：hover 会粘住，改由点击聚焦控制，气泡宽度随屏幕收窄 */
+@media (hover: none) {
+  .tip-pop { max-width: calc(100vw - 32px); }
+}
+
+/* 窄屏（手机 / 竖屏平板）：绝对定位的气泡一定会撞到右边界，
+   改成贴底卡片。宽度按视口算，无论图标在哪儿都不会溢出。 */
+@media (max-width: 768px) {
+  .tip-pop {
+    position: fixed; left: 12px; right: 12px; bottom: 12px; top: auto;
+    width: auto; max-width: none; padding: 0;
+    z-index: 95;
+  }
+  .tip-pop::after { display: none; }        /* 位置不固定，小箭头没意义 */
+  .tip-card {
+    max-height: 52vh;
+    box-shadow: 0 14px 44px rgba(16, 24, 40, .3);
+    font-size: 13px;                         /* 手机上比桌面大半号更好读 */
+  }
+  html[data-theme="dark"] .tip-card { box-shadow: 0 14px 44px rgba(0, 0, 0, .6); }
+}
+
+/* 表单里的说明行（hint）右侧挂提示图标时用，保住基线对齐 */
+.hint-row { display: flex; align-items: flex-start; gap: 7px; flex-wrap: wrap; }
+.hint-row .tip { margin-top: 2px; }
+
+/* 接口页里的折叠块：比默认 fold 更轻，不抢主体内容的注意力 */
+.ep-fold { margin-top: 14px; background: var(--panel-2); }
+.ep-fold > summary { font-size: 12.5px; padding: 9px 13px; }
+.ep-fold > .fold-body { padding: 12px 14px; }
+.ep-fold > .fold-body pre { margin: 6px 0; }
+.ep-fold > .fold-body p { margin: 0 0 8px; }
+.ep-fold > .fold-body p:last-child { margin-bottom: 0; }
+.ep-fold > .fold-body .btn.sm { margin-top: 6px; }
+
+/* <label> 里的提示图标不能撑高行高 */
+.form label .tip, .check-line .tip { transform: translateY(1px); }
+/* 面板标题里的提示图标与文字基线对齐（标题是小号大写字母，需要单独校） */
+.panel-title .tip { width: 14px; height: 14px; font-size: 10px; vertical-align: -2px; margin-left: 2px; }
+.panel-title .tag { text-transform: none; letter-spacing: 0; }
+/* 段落末尾的提示图标：拉开一点距离，避免和句号挤在一起 */
+.page-desc .tip, .prose .tip, .hint .tip { margin-left: 4px; }
+/* 标题里的问号稍亮一档，深色主题下也看得清 */
+.panel-title .tip { color: var(--text-2); border-color: var(--border-strong); }
+html[data-theme="dark"] .tip { color: var(--muted); background: var(--bg-soft); }
+
+/* 竖排表单标签里的「文字 + 提示图标」行；.lb 是 field_label() 的固定包装 */
+.form label > .lb, .form label > span.lb {
+  display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap;
+}
+.form label > span.lb .field-hint { margin-left: 0; }
