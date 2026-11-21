@@ -179,8 +179,26 @@ if ($noPush) {
     echo "4) --no-push：跳过 push\n";
 } else {
     [$c3, $o3] = pub_git(['push', 'origin', 'HEAD']);
+    // 本机/线上常有代理环境变量，偶尔会返回 502 CONNECT tunnel failed。
+    // 遇到代理类错误就临时清掉代理变量直连重试一次（github.com 直连可用），再恢复。
+    if ($c3 !== 0 && preg_match('/proxy|CONNECT tunnel|could not resolve|timed out|502/i', $o3)) {
+        echo "   push 走代理失败，临时禁用代理重试一次…\n";
+        $keys = ['HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'https_proxy', 'http_proxy', 'all_proxy'];
+        $saved = [];
+        foreach ($keys as $k) {
+            $saved[$k] = getenv($k);
+            putenv($k);
+        }
+        [$c3, $o3] = pub_git(['push', 'origin', 'HEAD']);
+        foreach ($saved as $k => $v) {
+            if ($v !== false) {
+                putenv($k . '=' . $v);
+            }
+        }
+    }
     if ($c3 !== 0) {
-        fwrite(STDERR, "git push 失败：$o3\n凭据请走系统 credential helper，不要写进 remote URL。\n");
+        fwrite(STDERR, "git push 失败：$o3\n凭据请走系统 credential helper，不要写进 remote URL。\n"
+            . "代理异常时可手动执行：HTTPS_PROXY= HTTP_PROXY= git push origin HEAD\n");
         exit(1);
     }
     echo "4) 已推送到 GitHub\n";
@@ -189,4 +207,4 @@ if ($noPush) {
 $repo = $manifest['repo'];
 echo "\n完成：https://github.com/$repo\n";
 echo "后台「系统与升级 → GitHub 在线更新」现在能读到这份清单：\n";
-echo "  https://raw.githubusercontent.com/$repo/main/updates.json\n";
+echo "  https://api.github.com/repos/$repo/contents/updates.json?ref=main\n";
