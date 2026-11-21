@@ -149,7 +149,8 @@ function agent_prompt_persona(): string
 
 function agent_prompt_protocol(): string
 {
-    return "【输出格式】每一步只输出一个 JSON 对象，不要 ``` 围栏，不要在 JSON 前后写任何解释：\n"
+    return "【输出格式】每一步只输出一个 JSON 对象；即使想连着做几步，也只发当前这一步，等系统把工具结果回灌给你再决定下一步。\n"
+        . "不要输出数组、不要一次给多个动作、不要 ``` 围栏，不要在 JSON 前后写任何解释：\n"
         . '{"action":"call","tool":"工具名","args":{...},"say":"一句话说明这一步在做什么"}' . "\n"
         . '{"action":"done","say":"给用户的最终回答，可以用 Markdown"}' . "\n"
         . '{"action":"ask","say":"需要用户补充的信息"}' . "\n\n"
@@ -197,14 +198,77 @@ function agent_prompt_boundary(): string
 }
 
 /**
+ * 模型把「好几步」塞进一个数组、或包了一层时，挑出这一步真正该执行的那一个。
+ *
+ * 协议是单步单动作：优先第一个带 tool 的 call（后面那些没跑工具就下的 done
+ * 结论往往是错的，不能采纳），否则取第一个 done/ask 收尾。
+ * 也兼容 {"actions":[...]} / {"steps":[...]} 这类包装。
+ */
+function agent_pick_action(array $d): array
+{
+    foreach (['actions', 'steps', 'tool_calls', 'messages'] as $k) {
+        if (!isset($d['action']) && isset($d[$k]) && is_array($d[$k])) {
+            $d = $d[$k];
+            break;
+        }
+    }
+    $isList = function_exists('array_is_list')
+        ? array_is_list($d)
+        : (array_keys($d) === range(0, count($d) - 1));
+    if (!$isList) {
+        return $d;
+    }
+    $fallback = null;
+    foreach ($d as $it) {
+        if (!is_array($it)) { continue; }
+        $a = strtolower((string)($it['action'] ?? $it['type'] ?? ''));
+        if ($a === '' && isset($it['tool'])) { $a = 'call'; }
+        $tool = (string)($it['tool'] ?? $it['name'] ?? '');
+        if ($a === 'call' && $tool !== '') { return $it; }
+        if ($fallback === null && in_array($a, ['done', 'ask', 'final'], true)) { $fallback = $it; }
+    }
+    if ($fallback !== null) { return $fallback; }
+    foreach ($d as $it) {
+        if (is_array($it)) { return $it; }
+    }
+    return [];
+}
+
+/** 原文看起来是动作协议（而非人话）吗 —— 决定兜底时能不能直接喷给用户 */
+function agent_text_is_protocol(string $t): bool
+{
+    $t = ltrim($t);
+    if ($t === '') { return false; }
+    if ($t[0] !== '{' && $t[0] !== '[' && !str_starts_with($t, '```')) { return false; }
+    return strpos($t, '"action"') !== false || strpos($t, '"tool"') !== false
+        || strpos($t, '"say"') !== false || strpos($t, "'action'") !== false;
+}
+
+/** 从畸形 / 多动作文本里尽量抽出 say 拼成人话，别让用户看一屏 JSON */
+function agent_says_from_text(string $t): string
+{
+    $out = [];
+    if (preg_match_all('~"say"\s*:\s*"((?:\\\\.|[^"\\\\])*)"~u', $t, $m)) {
+        foreach ($m[1] as $raw) {
+            $s = json_decode('"' . $raw . '"', true);
+            $s = is_string($s) ? trim($s) : trim((string)$raw);
+            if ($s !== '' && !in_array($s, $out, true)) { $out[] = $s; }
+        }
+    }
+    return implode("\n\n", $out);
+}
+
+/**
  * 解析模型输出 → ['action'=>'call|done|ask','tool'=>,'args'=>[],'say'=>string]
- * 解析不出来就把整段当最终回答（很多模型会忘记 JSON）。
+ * 解析不出来就把整段当最终回答（很多模型会忘记 JSON）；
+ * 但原文明显是协议 JSON 时，绝不把整段喷给用户。
  */
 function agent_parse_action(string $text): array
 {
     $text = trim($text);
     $d = ai_extract_json($text);
     if (is_array($d)) {
+        $d = agent_pick_action($d);
         $action = strtolower((string)($d['action'] ?? $d['type'] ?? ''));
         $say = trim((string)($d['say'] ?? $d['thought'] ?? $d['message'] ?? $d['answer'] ?? ''));
         if ($action === '' && isset($d['tool'])) {
@@ -228,7 +292,17 @@ function agent_parse_action(string $text): array
             return ['action' => $action, 'tool' => $tool, 'args' => $args, 'say' => $say];
         }
     }
-    // 兜底：模型直接说了人话
+    // 兜底：模型直接说了人话 → 照原样显示。
+    // 吐的是协议 JSON（数组 / 多动作 / 格式坏掉）时，先抽 say 成人话，
+    // 实在抽不到就给一句能照做的提示；原文仍完整存在库里供排查。
+    if (agent_text_is_protocol($text)) {
+        $human = agent_says_from_text($text);
+        return [
+            'action' => 'done', 'tool' => '', 'args' => [],
+            'say' => $human !== '' ? $human
+                : '（模型这次返回了不符合动作格式的内容，这一步没有执行任何操作。可以换个说法再问一次，或在「我的模型」里换一个更会遵循格式的模型。）',
+        ];
+    }
     return ['action' => 'done', 'tool' => '', 'args' => [], 'say' => $text];
 }
 
