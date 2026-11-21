@@ -15,6 +15,7 @@ require __DIR__ . '/app/bootstrap.php';
 require __DIR__ . '/app/web.php';
 require __DIR__ . '/app/pay/web.php';
 require __DIR__ . '/app/upgrade.php';
+require __DIR__ . '/app/github_update.php';
 
 $route = get_q('r', '');
 

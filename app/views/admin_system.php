@@ -9,6 +9,128 @@
 <?php if ($msg !== ''): ?><div class="flash ok"><?= e($msg) ?></div><?php endif; ?>
 <?php if ($err !== ''): ?><div class="flash err"><?= e($err) ?></div><?php endif; ?>
 
+<?php
+$ghChain = is_array($ghCheck ?? null) ? (array)($ghCheck['chain'] ?? []) : [];
+$ghTarget = $ghChain ? (string)$ghChain[count($ghChain) - 1]['version'] : (string)($ghCheck['latest'] ?? '');
+?>
+<section class="panel">
+  <h2 class="panel-title">GitHub 在线更新 <span class="tag">推荐</span></h2>
+  <div class="hint">
+    默认经 <b>GitHub API</b>（<code>api.github.com</code>，国内可达）从公开仓库
+    <code><?= e((string)$ghRepo) ?></code> 的 <code><?= e((string)$ghBranch) ?></code> 分支读取
+    <code>updates.json</code> 清单，按 <code>min_version</code> 自动连升多个版本；每个包都校验 sha256，
+    升级前自动备份数据库，<code>config.php</code> / <code>storage/</code> / <code>data/</code> 不会被覆盖。
+    清单地址：<span class="gh-src mono tiny"><?= e((string)$ghManifestUrl) ?></span>
+  </div>
+
+  <div class="gh-actions">
+    <form method="post" action="<?= e(u('admin_system')) ?>" data-gh-busy="正在检查…">
+      <?= csrf_field() ?>
+      <input type="hidden" name="action" value="gh_check">
+      <button class="btn sm" type="submit">检查更新</button>
+    </form>
+    <form method="post" action="<?= e(u('admin_system')) ?>" data-gh-busy="正在更新，请勿关闭页面…"
+          onsubmit="return confirm('将从 GitHub 下载并自动升级，期间请勿关闭页面。确定继续？')">
+      <?= csrf_field() ?>
+      <input type="hidden" name="action" value="gh_update">
+      <button class="btn primary sm" type="submit">立即更新</button>
+    </form>
+  </div>
+
+  <?php if (is_array($ghResult ?? null)): ?>
+    <div class="flash <?= !empty($ghResult['ok']) ? 'ok' : 'err' ?>">
+      <?= e((string)($ghResult['message'] ?? '')) ?>
+      <?php if (!empty($ghResult['steps'])): ?>
+        <ul class="gh-steps">
+          <?php foreach ($ghResult['steps'] as $s): ?>
+            <li>v<?= e((string)($s['version'] ?? '')) ?>：<?= e((string)($s['message'] ?? '')) ?></li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
+
+  <?php if (is_array($ghCheck ?? null)): ?>
+    <?php if (empty($ghCheck['ok'])): ?>
+      <div class="flash err">检查更新失败：<?= e((string)($ghCheck['error'] ?? '')) ?></div>
+    <?php elseif (!empty($ghCheck['up_to_date'])): ?>
+      <div class="flash ok">已是最新版本 v<?= e((string)($ghCheck['current'] ?? '')) ?>
+        （检查于 <?= e((string)($ghCheck['checked_at'] ?? '')) ?>）</div>
+    <?php elseif (!empty($ghCheck['broken'])): ?>
+      <div class="flash err">仓库最新是 v<?= e((string)($ghCheck['latest'] ?? '')) ?>，但当前 v<?= e((string)($ghCheck['current'] ?? '')) ?>
+        与发布链之间存在缺口（min_version 对不上）。请手动上传中间版本的更新包。</div>
+    <?php else: ?>
+      <div class="flash ok">
+        发现新版本：v<?= e((string)($ghCheck['current'] ?? '')) ?> → <b>v<?= e($ghTarget) ?></b>，
+        共 <?= count($ghChain) ?> 步。点「立即更新」会自动按链连升。
+        <ol class="gh-steps">
+          <?php foreach ($ghChain as $s): ?>
+            <li>v<?= e((string)($s['version'] ?? '')) ?><?= !empty($s['notes'])
+              ? ' — ' . e(mb_substr((string)$s['notes'], 0, 80, 'UTF-8')) : '' ?></li>
+          <?php endforeach; ?>
+        </ol>
+      </div>
+    <?php endif; ?>
+  <?php endif; ?>
+
+  <details class="fold">
+    <summary>更新源设置 <span class="fold-note">仓库 / 分支 / 镜像 / 证书</span></summary>
+    <div class="fold-body">
+      <form method="post" action="<?= e(u('admin_system')) ?>" class="form">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="gh_settings">
+        <label>更新源通道
+          <select name="gh_source">
+            <option value="api" <?= $ghSource === 'api' ? 'selected' : '' ?>>GitHub API（推荐 · 国内可达）</option>
+            <option value="raw" <?= $ghSource === 'raw' ? 'selected' : '' ?>>raw.githubusercontent.com（国外直连）</option>
+            <option value="custom" <?= $ghSource === 'custom' ? 'selected' : '' ?>>自定义镜像</option>
+          </select>
+        </label>
+        <div class="hint">
+          GitHub API 未认证限额 <b>60 次/小时</b>（检查 1 次 + 每个更新包 1 次），正常使用足够；
+          国外服务器可切 raw 通道避免限流。<code>raw.githubusercontent.com</code> 在国内常被墙，别选错。
+        </div>
+        <label>仓库（owner/repo）
+          <input type="text" name="gh_repo" value="<?= e((string)$ghRepo) ?>" maxlength="120" class="mono">
+        </label>
+        <label>分支
+          <input type="text" name="gh_branch" value="<?= e((string)$ghBranch) ?>" maxlength="60" class="mono">
+        </label>
+        <label>更新源镜像（可选，留空直连 GitHub）
+          <input type="text" name="gh_mirror" value="<?= e((string)$ghMirror) ?>" maxlength="240"
+                 placeholder="https://mirror.example.com/https://raw.githubusercontent.com" class="mono">
+        </label>
+        <div class="hint">
+          选「自定义镜像」时必填，按 <code>{镜像}/{owner}/{repo}/{分支}/updates.json</code> 拼接（例如
+          <code>https://mirror.example.com/https://raw.githubusercontent.com</code>）。镜像必须 https，
+          系统会校验解析到公网地址，拒绝内网 / 回环 / 云元数据地址。
+        </div>
+        <label class="check-line">
+          <input type="checkbox" name="gh_ssl_verify" value="1" <?= $ghSslVerify ? 'checked' : '' ?>>
+          校验 TLS 证书
+        </label>
+        <div class="hint">
+          仅当服务器缺少 CA 根证书、报 TLS 错误时才关闭；关闭后更新包仍有 sha256 完整性校验兜底。
+        </div>
+        <div class="form-actions">
+          <button class="btn sm" type="submit">保存更新源设置</button>
+        </div>
+      </form>
+    </div>
+  </details>
+</section>
+
+<script>
+(function () {
+  document.querySelectorAll('form[data-gh-busy]').forEach(function (f) {
+    f.addEventListener('submit', function () {
+      var b = f.querySelector('button[type="submit"]');
+      if (b) { b.disabled = true; b.textContent = f.getAttribute('data-gh-busy'); }
+    });
+  });
+})();
+</script>
+
 <div class="two-col">
   <section class="panel">
     <h2 class="panel-title">上传更新包</h2>
@@ -35,6 +157,7 @@
       <div><span>数据库</span><b><?= e($driver === 'sqlite' ? 'SQLite' : 'MySQL') ?></b></div>
       <div><span>时区</span><b><?= e(date_default_timezone_get()) ?></b></div>
       <div><span>zip 扩展</span><b><?= class_exists('ZipArchive') ? '可用' : '缺失（无法在线升级）' ?></b></div>
+      <div><span>curl 扩展</span><b><?= function_exists('curl_init') ? '可用' : '缺失（无法从 GitHub 更新）' ?></b></div>
       <div><span>上传上限</span><b><?= e(ini_get('upload_max_filesize')) ?></b></div>
       <div><span>数据目录</span><b class="mono tiny"><?= e(db_driver() === 'sqlite' ? 'storage/kb.sqlite' : (cfg()['db']['database'] ?? '')) ?></b></div>
     </div>
@@ -147,6 +270,8 @@ $nginxFull = nginx_snippet();
 ├── files/              app/  assets/  index.php  api.php ...
 └── migrations/         1.1.0.php（可选，每个文件 return function(PDO $pdo){}）</code></pre>
     <p>2. 后台 → 系统与升级 → 选择 zip → 开始升级。系统会：校验版本 → 备份数据库 → 覆盖文件 → 执行迁移 → 写回版本号。</p>
+    <p>2b. 不想手动传包就用顶部「GitHub 在线更新」：检查更新 → 立即更新，系统按 <code>min_version</code>
+       自动连升多个版本，每个包都校验 sha256。更新源（仓库 / 分支 / 镜像 / 证书）可在「更新源设置」里改。</p>
     <p>3. 升级失败时数据库备份在 <code>storage/backups/</code>，把文件恢复回去即可。</p>
   </div>
     </div>

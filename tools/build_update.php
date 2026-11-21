@@ -49,8 +49,10 @@ if ($min === '') {
 // 要打进 files/ 的内容
 // 注意：install.php 故意不打进去。升级包里带它会把用户已经删掉的安装向导又放回来，
 // 白白多一个暴露面。安装向导只属于全量包（build_release.php）。
+// updates.json 也故意不打进去：它记录了各更新包的 sha256，一旦进包就会改变包内容、
+// 让清单里的 hash 自相矛盾。清单只放在 GitHub 仓库里，后台在线更新时实时拉取。
 $include = ['app', 'assets', 'examples', 'index.php', 'api.php', 'mcp.php', 'openapi.php', 'llms.php', '.htaccess', 'tools',
-    'README.md', 'DEPLOY.md', 'nginx.example.conf'];
+    'README.md', 'DEPLOY.md', 'nginx.example.conf', 'LICENSE'];
 $skipNames = ['config.php', 'config.sample.php', 'version.json'];
 $skipDirs = ['storage', 'dist', 'data', '.git', '__MACOSX', '__pycache__'];
 

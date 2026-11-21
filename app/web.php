@@ -1110,13 +1110,74 @@ function ctrl_admin_system(): void
                 }
             }
         }
+
+        /* ---- GitHub 在线更新（检查 / 一键升级 / 更新源设置） ---- */
+        $act = (string)($_POST['action'] ?? '');
+        if ($act === 'gh_settings') {
+            $repo = trim((string)post('gh_repo', ''));
+            $branch = trim((string)post('gh_branch', ''));
+            $mirror = trim((string)post('gh_mirror', ''));
+            $source = trim((string)post('gh_source', 'api'));
+            if ($repo !== '' && !preg_match('#^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$#', $repo)) {
+                $err = '仓库格式应为 owner/repo';
+            } elseif ($branch !== '' && !preg_match('#^[A-Za-z0-9._/-]+$#', $branch)) {
+                $err = '分支名只能包含字母、数字、点、下划线、短横线和斜杠';
+            } elseif (!in_array($source, ['api', 'raw', 'custom'], true)) {
+                $err = '更新源通道不合法';
+            } elseif ($source === 'custom' && $mirror === '') {
+                $err = '自定义镜像通道必须填写镜像地址';
+            } elseif ($mirror !== '' && !preg_match('#^https://[^\s]+$#i', $mirror)) {
+                $err = '更新源镜像必须以 https:// 开头';
+            } else {
+                setting_set('gh_repo', $repo);
+                setting_set('gh_branch', $branch);
+                setting_set('gh_mirror', $mirror);
+                setting_set('gh_source', $source);
+                setting_set('gh_ssl_verify', post('gh_ssl_verify', '0') === '1' ? '1' : '0');
+                audit('gh_settings', 'source=' . gh_source() . ' repo=' . gh_repo() . ' branch=' . gh_branch()
+                    . ' mirror=' . (gh_mirror() !== '' ? 'yes' : 'no') . ' ssl=' . (gh_verify_ssl() ? '1' : '0'));
+                flash('更新源设置已保存');
+                redirect(u('admin_system'));
+            }
+        }
+        if ($act === 'gh_check') {
+            try {
+                $_SESSION['gh_check'] = gh_check();
+            } catch (Throwable $e) {
+                $_SESSION['gh_check'] = [
+                    'ok' => false, 'error' => $e->getMessage(),
+                    'current' => gh_current_version(), 'checked_at' => date('Y-m-d H:i:s'),
+                ];
+            }
+            unset($_SESSION['gh_result']);
+            redirect(u('admin_system'));
+        }
+        if ($act === 'gh_update') {
+            $_SESSION['gh_result'] = gh_update_run();
+            unset($_SESSION['gh_check']);
+            redirect(u('admin_system'));
+        }
     }
+
+    $ghCheck = $_SESSION['gh_check'] ?? null;
+    $ghResult = $_SESSION['gh_result'] ?? null;
+    unset($_SESSION['gh_check'], $_SESSION['gh_result']);
     $verJson = json_decode((string)@file_get_contents(BASE_PATH . '/version.json'), true) ?: [];
     view('admin_system', [
         'title' => '系统与升级',
         'ver' => $verJson,
         'msg' => $msg, 'err' => $err,
-        'history' => all('SELECT * FROM ' . tbl('audit_log') . " WHERE action LIKE 'upgrade%' ORDER BY id DESC LIMIT 10"),
+        'ghCheck' => $ghCheck,
+        'ghResult' => $ghResult,
+        'ghRepo' => gh_repo(),
+        'ghBranch' => gh_branch(),
+        'ghMirror' => gh_mirror(),
+        'ghSource' => gh_source(),
+        'ghSslVerify' => gh_verify_ssl(),
+        'ghManifestUrl' => gh_source() === 'api'
+            ? 'https://api.github.com/repos/' . gh_repo() . '/contents/updates.json?ref=' . rawurlencode(gh_branch())
+            : gh_base() . '/' . gh_repo() . '/' . gh_branch() . '/updates.json',
+        'history' => all('SELECT * FROM ' . tbl('audit_log') . " WHERE action LIKE 'upgrade%' OR action LIKE 'gh_%' ORDER BY id DESC LIMIT 10"),
         'php' => PHP_VERSION,
         'driver' => db_driver(),
         'allowRegister' => register_allowed(),

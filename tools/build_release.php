@@ -28,7 +28,9 @@ $out = (string)($opts['out'] ?? ($root . '/dist/kb-portal-' . $version . '.zip')
 
 $include = ['app', 'assets', 'data', 'examples', 'migrations', 'tools', '.htaccess', 'index.php', 'api.php',
     'mcp.php', 'openapi.php', 'llms.php', 'install.php', 'version.json', 'README.md', 'DEPLOY.md',
-    'nginx.example.conf', 'config.sample.php'];
+    'nginx.example.conf', 'config.sample.php', 'LICENSE'];
+// updates.json 不进包：它是 GitHub 仓库里的发布清单（含各包 sha256），
+// 随包分发会造成「打包改变内容 → 清单 hash 失效」的循环依赖。后台在线更新实时从仓库拉取。
 
 $skipFiles = ['config.php'];
 $skipDirs = ['storage', 'dist', '.git', '__MACOSX', 'node_modules', '__pycache__'];

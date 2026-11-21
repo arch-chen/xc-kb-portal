@@ -754,3 +754,76 @@ chown -R www:www /www/kbdata
   **已经写进知识库的内容不受影响**。删当前会话后回到工作台，删别的会话只从侧栏移除。
 - 全新安装的默认站点名是 **XC知识库系统**；已装好的站在
   `管理后台 → 系统与升级 → 站点名称` 里改，改完全站生效（`settings.site_name` 优先于 `config.php`）。
+
+---
+
+## 16. GitHub 在线更新与发版（2.2.0 起）
+
+系统已在 `https://github.com/arch-chen/xc-kb-portal` 开源（MIT，单版本全功能）。2.2.0 起后台可以
+**直接从 GitHub 拉取更新包自动升级**，不用再手动下载 zip 再上传。
+
+### 16.1 后台怎么用
+
+`管理后台 → 系统与升级`，页面顶部「GitHub 在线更新」：
+
+1. 点 **检查更新**：默认经 `api.github.com` 的 contents API（`Accept: application/vnd.github.raw`，
+   直接返回文件原始内容、不重定向）读取 `main` 分支根目录的 `updates.json`，列出当前版本到最新版的
+   **完整升级链**（按每个包的 `min_version` 逐级排好），并显示每一步的更新说明。
+2. 点 **立即更新**：按链依次下载 `updates/update-x.y.z.zip` → 校验 sha256 → 调用
+   `upgrade_apply()`（自动备份 SQLite、覆盖 `files/`、执行 `migrations/`、写回 `version.json`）。
+   一次连升多步也没问题，以前「老版本要连传十几个包」的活不用再手工做。
+3. 结果会列出每一步升到哪个版本、覆盖了多少文件；**刷新页面**后版本号与界面才是新代码
+   （PHP 进程在升级请求里仍加载着旧文件，这是正常现象）。
+
+升级仍不会碰 `config.php`、`storage/`、`data/`；数据库备份在 `storage/backups/`。
+「检查更新」只读取清单，不下载包、不改动任何文件。
+
+### 16.2 更新源设置
+
+同一个面板下的「更新源设置」：
+
+| 项 | 默认 | 说明 |
+|---|---|---|
+| 更新源通道 | `api`（GitHub API） | `api` = `api.github.com` contents API，**国内实测可达**；`raw` = 直连 `raw.githubusercontent.com`（国外服务器用，无限流）；`custom` = 自建镜像 |
+| 仓库 | `arch-chen/xc-kb-portal` | 格式 `owner/repo`。换自己的 fork 后，`updates.json` 里的 `repo` 字段要一致，否则拒绝更新 |
+| 分支 | `main` | 清单与更新包都从这个分支的 `updates/` 目录取 |
+| 更新源镜像 | 空 | 选 `custom` 时必填，按 `{镜像}/{owner}/{repo}/{分支}/updates.json` 拼接，例如 `https://mirror.example.com/https://raw.githubusercontent.com` |
+| 校验 TLS 证书 | 开 | 服务器缺 CA 根证书报 TLS 错误时才关；关掉后仍有 sha256 完整性校验兜底 |
+
+**为什么默认走 API 而不是 raw**：国内网络里 `raw.githubusercontent.com` 经常直接超时，
+`github.com/{repo}/raw/...` 和 jsDelivr 也都会 301/302 跳回这个域名；
+而 `api.github.com` 直连可用、contents API 带 `Accept: application/vnd.github.raw` 能直接吐出文件字节。
+代价是未认证限额 **60 次/小时**（检查 1 次 + 每个更新包 1 次），正常升级够用；
+被限流时后台会明确提示，可切 `raw`、配镜像或稍后再试。
+
+安全边界（改代码时别删）：只走 https / 443；默认域名白名单 `api.github.com` /
+`raw.githubusercontent.com` / `*.githubusercontent.com` 等，自定义镜像必须解析到公网地址（拒绝私网 / 回环 / 169.254 云元数据）；下载文件名只允许
+`[A-Za-z0-9._-]+.zip`，防路径穿越；每个包按清单 sha256 校验。整套动作只在管理员 + CSRF 之后执行。
+连不上时会明确提示「配镜像」或「改用手动上传」，不会静默失败。
+
+### 16.3 发版流程（开发机，固定动作）
+
+以后**每次发版都必须同步 GitHub**，否则后台一键更新读到的是旧清单。顺序：
+
+```bash
+# 1) 改 version.json（version / released / notes）
+# 2) 打两个包
+php tools/build_update.php --version=2.2.0 --from=2.1.1
+php tools/build_release.php
+# 3) 实测旧版 → 新版、全新安装、包一致性（项目铁律，别跳）
+# 4) 同步到 GitHub：dist/update-*.zip → updates/，重算 updates.json（含 sha256），commit + push
+php tools/publish_github.php
+```
+
+`publish_github.php` 支持 `--dry-run`（只生成清单预览）、`--no-push`（本地提交不推送）。
+它会扫描每个包，发现 `config.php` / `storage/` / `data/` / `.sqlite` 等路径就拒绝入库。
+凭据走系统 Git credential helper，**不要写进 remote URL 或任何文件**。
+
+清单 `updates.json` 故意**不打进 zip**：它记录了各包的 sha256，进包会改变包内容、
+让 hash 自相矛盾。后台每次实时从仓库拉取，本地不需要副本。
+
+### 16.4 首次使用注意
+
+线上如果还在 2.1.1 或更早，**后台还没有这个按钮** —— 先手动上传一次
+`update-2.2.0.zip`（或用全量包重装）把功能装上，之后所有版本都能一键更新。
+仓库 `updates/` 里已经放了 1.1.0 起全部历史更新包，老版本也能一次连升到最新。

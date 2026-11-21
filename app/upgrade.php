@@ -8,14 +8,16 @@ declare(strict_types=1);
  *   version.json          {"version":"1.1.0","min_version":"1.0.0","notes":"..."}
  *   files/                要覆盖到站点根目录的文件树
  *   migrations/*.php      每个文件 return function(PDO $pdo): void
+ *
+ * @param string|null $curVersion 当前版本。链式自动升级时由调用方显式传入，
+ *                                因为 APP_VERSION 是进程启动时定义的常量，同进程里升完一级不会变。
  */
-
-function upgrade_apply(string $zipPath): array
+function upgrade_apply(string $zipPath, ?string $curVersion = null): array
 {
     if (!class_exists('ZipArchive')) {
         return ['ok' => false, 'message' => 'PHP 缺少 zip 扩展，无法解压更新包'];
     }
-    $cur = APP_VERSION;
+    $cur = ($curVersion !== null && $curVersion !== '') ? $curVersion : APP_VERSION;
     $zip = new ZipArchive();
     if ($zip->open($zipPath) !== true) {
         return ['ok' => false, 'message' => '无法打开 zip（文件损坏或不是 zip）'];

@@ -21,6 +21,9 @@
 
 # 升级/备份临时产物
 *.zip
+# 例外：仓库根 updates/ 里的在线更新包必须入库（后台 GitHub 一键更新要按清单下载）
+!updates/
+!updates/*.zip
 *.bak
 *.sql
 *.log

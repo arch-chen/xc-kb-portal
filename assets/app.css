@@ -910,3 +910,10 @@ details.fold > .fold-body { padding: 14px; }
     overflow: hidden; line-height: 1.5;
   }
 }
+
+/* 后台 · GitHub 在线更新 */
+.gh-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.gh-actions form { margin: 0; }
+.gh-steps { margin: 8px 0 0; padding-left: 20px; font-size: 12.5px; line-height: 1.75; color: var(--muted); }
+.gh-steps li { margin: 2px 0; }
+.gh-src { word-break: break-all; color: var(--muted); }
