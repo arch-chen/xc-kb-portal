@@ -1,0 +1,41 @@
+# ── 运行时生成 / 含真实数据，绝不入库 ──────────────────────────
+/config.php
+/storage/*.sqlite
+/storage/*.sqlite-*
+/storage/*.db
+/storage/backups/*
+/storage/tmp/*
+!/storage/backups/.gitkeep
+!/storage/tmp/.gitkeep
+
+# 业务数据（微信群问答导出，私有资产）
+/data/*.csv
+/data/*.json
+/data/*.xlsx
+
+# 历史发布包（各版本 zip，体积大且含旧代码）
+/dist/
+
+# 本地测试站与测试夹具（含假支付数据、测试库、内部路径与口令）
+/_test/
+
+# 升级/备份临时产物
+*.zip
+*.bak
+*.sql
+*.log
+*.tmp
+*.swp
+*~
+
+# ── 编辑器 / 系统 ────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.code-workspace
+
+# ── 依赖 ────────────────────────────────────────────────────
+/vendor/
+/node_modules/

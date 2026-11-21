@@ -1,0 +1,55 @@
+# Apache 配置（Nginx 见 README 里的示例）
+# 1) 保护敏感文件  2) 可选伪静态：/api/v1/search、/g/wayfair、/entry/12
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # 数据与代码目录一律不对外。SQLite 库、备份、种子 CSV 都在里面，
+  # 一旦能直接下载，等于整站内容裸奔（nginx 不吃 .htaccess，站点配置里要加同样的规则）
+  RewriteRule ^(?:app|data|storage|migrations|tools|examples)/ - [F,L]
+
+  # API：/api/v1/xxx → api.php?path=/v1/xxx
+  RewriteRule ^api/(.*)$ api.php?path=/$1 [QSA,L]
+
+  # MCP：/mcp → mcp.php （不配也能用 /mcp.php）
+  RewriteRule ^mcp/?$ mcp.php [QSA,L]
+
+  # 给 Agent 读的纯文本索引：/llms.txt → llms.php
+  RewriteRule ^llms\.txt$ llms.php [L]
+
+  # 页面伪静态：不存在文件/目录时交给 index.php
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.*)$ index.php?p=$1 [QSA,L]
+</IfModule>
+
+# 禁止直接下载配置与数据文件
+<FilesMatch "^(config\.php|config\.sample\.php)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+<FilesMatch "\.(sqlite|sqlite3|db|db-wal|db-shm|log|lock|md|csv|bak|zip|sql|conf)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# 关掉目录列表
+Options -Indexes
+
+# 静态资源缓存
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+</IfModule>
