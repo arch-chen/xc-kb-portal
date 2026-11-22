@@ -192,6 +192,13 @@ function site_brand_src_value(string $v): string
 /**
  * 保存背景设置。返回 ['ok'=>bool,'message'=>string,'error'=>string]。
  * $files 传 $_FILES 进来（bg_image_login / bg_image_register）。
+ *
+ * 字段名必须与 app/views/admin_auth.php 里的 name 完全一致：
+ *   表单写 name="auth_bg_login_type"，这里就得读 $post['auth_bg_login_type']。
+ * 早先这里读的是 $post['login_type']（少了 auth_bg_ 前缀），而 setting 键才是
+ * auth_bg_login_type——两套命名混用导致 $type 永远读不到、回落到默认 preset，
+ * 于是后台无论选什么都保存不进去。注意 $p 同时是 setting 键前缀和表单字段前缀，
+ * 不要让它们分叉。
  */
 function auth_bg_save(array $post, array $files = []): array
 {
@@ -211,16 +218,16 @@ function auth_bg_save(array $post, array $files = []): array
             continue;
         }
 
-        $type = (string)($post[$slot . '_type'] ?? 'preset');
+        $type = (string)($post[$p . 'type'] ?? 'preset');
         if (!in_array($type, ['preset', 'image', 'url', 'code', 'none'], true)) {
             return ['ok' => false, 'message' => '', 'error' => '背景类型不合法'];
         }
 
-        $dim = (int)($post[$slot . '_dim'] ?? 0);
+        $dim = (int)($post[$p . 'dim'] ?? 0);
         $dim = max(0, min(90, $dim));
 
         if ($type === 'preset') {
-            $val = (string)($post[$slot . '_preset'] ?? AUTH_BG_DEFAULT);
+            $val = (string)($post[$p . 'preset'] ?? AUTH_BG_DEFAULT);
             if (!isset($presets[$val])) {
                 return ['ok' => false, 'message' => '', 'error' => '没有这个内置背景'];
             }
@@ -243,7 +250,7 @@ function auth_bg_save(array $post, array $files = []): array
             } else {
                 // 没传新文件：沿用已有值（本地文件名或外链）
                 $cur = (string)setting_get($p . 'value', '');
-                $url = trim((string)($post[$slot . '_image_url'] ?? ''));
+                $url = trim((string)($post[$p . 'image_url'] ?? ''));
                 if ($url !== '') {
                     if (!preg_match('~^(https?://|//|/)~i', $url)) {
                         return ['ok' => false, 'message' => '', 'error' => '背景图地址必须以 http(s):// 或 / 开头'];
@@ -261,7 +268,7 @@ function auth_bg_save(array $post, array $files = []): array
                 }
             }
         } elseif ($type === 'url') {
-            $url = trim((string)($post[$slot . '_url'] ?? ''));
+            $url = trim((string)($post[$p . 'url'] ?? ''));
             if ($url === '') {
                 return ['ok' => false, 'message' => '', 'error' => auth_bg_slots()[$slot] . '地址不能为空'];
             }
@@ -270,7 +277,7 @@ function auth_bg_save(array $post, array $files = []): array
             }
             setting_set($p . 'value', mb_substr($url, 0, 500, 'UTF-8'));
         } elseif ($type === 'code') {
-            $code = (string)($post[$slot . '_code'] ?? '');
+            $code = (string)($post[$p . 'code'] ?? '');
             if (trim($code) === '') {
                 return ['ok' => false, 'message' => '', 'error' => auth_bg_slots()[$slot] . '自定义代码不能为空'];
             }
