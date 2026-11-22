@@ -935,3 +935,98 @@ svg 被浏览器直链打开时会执行里面的脚本，属于存储型 XSS。
   改成 `margin-top` 会出现「鼠标一移动就消失」。
 - 小箭头是 `.tip-pop::after` 画的，位置在卡片**外面**。若挪进 `.tip-card`，会被
   `overflow: auto`（长内容滚动）裁掉。
+
+## 19. 对外首页、来源入口与默认图标（2.5.0 起）
+
+### 19.1 落地页与工作台的分工
+
+| 地址 | 谁看到 | 内容 |
+|---|---|---|
+| `/` | 已登录 | 工作台（搜索 + 我的分组 + 最近更新） |
+| `/` | 未登录 | 302 到 `?r=landing` |
+| `?r=landing` | 所有人 | 对外落地页 |
+
+落地页是**免登录**的，所以那个视图里不能调 `require_login()`，也不查任何用户数据。
+它只读 `site_info()`（站点名 / 副标题 / 简介 / logo），换个人部署改个名就是自己的站。
+
+一个刻意的取舍：落地页**不显示**「本站有多少条问答」。`groups` 表没有「公开」标记，
+匿名访客不该知道你库里有多少内容——那个数字本身就是信息。登录后回工作台才看得到真实规模。
+
+控制器在 `app/web.php` 的 `ctrl_landing()`，能力清单在 `landing_caps()`。
+**加了大功能记得回来改 `landing_caps()`**，否则首页会写着一件其实没有的事。
+
+### 19.2 GitHub 入口为什么不可隐藏
+
+需求原话是「每个页面都要显示有连接 github 仓库的入口，并且这个入口不可隐藏」，
+所以 `app/github_link.php` 里有一处**刻意的不设计**：
+
+```php
+const KB_REPO_URL = 'https://github.com/arch-chen/xc-kb-portal';
+```
+
+- 不是 settings 项（配置项意味着可关可改，那就不叫不可隐藏）
+- 不做权限判断（普通用户、管理员、未登录访客都看得到）
+- 后台没有对应表单项
+- `site_footer_html()` 里**无条件**追加，所以连「站点信息全空」的老站也有
+- 工作台 `.main-agent` 用 CSS 把页脚藏了（整屏布局没空间），但**侧栏入口仍在**
+
+三个渲染函数：
+
+| 函数 | 用在哪 | 形态 |
+|---|---|---|
+| `github_side_link()` | 登录后侧栏顶部 | 图标 + 「GitHub 开源」+ MIT 角标 |
+| `github_inline_link('pill')` | 落地页首屏 CTA | 胶囊按钮 |
+| `github_inline_link('text')` | 页脚 / 支付回跳页 | 纯文字链接 |
+
+都带 `target="_blank" rel="noopener noreferrer"`。`noopener` 不是可选项——
+少它的话，新开的仓库页能用 `window.opener` 把你的登录页重定向到钓鱼站。
+
+### 19.3 默认图标：开通即有
+
+以前 favicon 默认为空，新站开出来浏览器标签上一个图标都没有。现在内置一套：
+
+```
+assets/icon.svg        矢量，现代浏览器优先取（任何 DPI 都锐利）
+assets/icon-32.png     32×32 通用
+assets/icon-16.png     16×16
+assets/icon-180.png    180×180，「添加到主屏」用
+assets/favicon.ico     16+32 双尺寸，老浏览器 / 直接访问 /favicon.ico
+```
+
+生成脚本是 `tools/make_icon.php`。**服务器上没有 GD 扩展**（`php -m` 只有
+`pdo_sqlite` / `sqlite3` / `mbstring`），所以不能用 `imagecreatetruecolor`——
+那个脚本自己拼 IHDR / IDAT / IEND 写 PNG 流，zlib 用 `gzcompress`（PHP 自带，不依赖 GD），
+图形靠逐像素数学判断 + 4×4 超采样抗锯齿。
+
+**改了配色或字样，重跑一次脚本即可**：`php tools/make_icon.php`，五个文件一起更新。
+
+回落逻辑在 `site_favicon_tag()`：
+
+- 没上传 favicon → 输出内置那套（SVG → 32PNG → ico → apple-touch）
+- 上传过 → **只输出上传的那一张**，站方品牌优先，不能两套混着打架
+
+### 19.4 登录页数字动效的五条约束
+
+`assets/login-bg.js`，纯 canvas、零依赖、不请求任何资源。写的时候守了五条：
+
+1. **不抢焦点** —— `pointer-events: none`，输入框的点击和光标不受影响。
+   曾用 CDP 验过：`elementFromPoint(视口中心)` 命中的是 `INPUT`，不是 `CANVAS`。
+2. **不吵读屏** —— `<canvas aria-hidden="true">`，Tab 也到不了。
+3. **尊重减少动效** —— `prefers-reduced-motion: reduce` 时**不启动**，只铺一层静态底
+   （静态底也撒一层很淡的固定字形，让这类用户仍看得出是数据主题）。CSS 里同样 `display:none`。
+4. **不后台烧电** —— `visibilitychange` 切走就 `cancelAnimationFrame`，回来再续。
+5. **手机省着来** —— 列宽 13px（桌面 17）、帧率 15（桌面 24）、DPR 封顶 2。
+
+配色跟主题走：亮色主题浅底蓝字，暗色主题深底亮字。点「切换主题」会清屏重画，
+否则旧字色的拖尾要糊很久才散。
+
+登录页的页脚和卡片用同一套底色 + `backdrop-filter`，看起来是一整块——
+不然数字会从卡片和页脚之间的缝里穿过去，页脚文字看不清。
+
+### 19.5 llms.txt 的死链修复
+
+`/llms.txt` 靠 `.htaccess` / `nginx` 把 `.txt` 转给 `llms.php`，但那是**可选的短地址**。
+线上实测：没配 rewrite 的站访问 `/llms.txt` 是 **404**，只有 `/llms.php` 通。
+开发文档页原本直接写 `/llms.txt`，等于在没配 rewrite 的站上挂一堆死链。
+
+现在统一走 `llms_url()`：静态文件存在才用 `.txt`，否则回退 `.php`。**别硬编码 `/llms.txt`。**

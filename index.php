@@ -21,6 +21,7 @@ $route = get_q('r', '');
 
 $routes = [
     ''             => 'ctrl_home',
+    'landing'      => 'ctrl_landing',
     'login'        => 'ctrl_login',
     'register'     => 'ctrl_register',
     'forgot'       => 'ctrl_forgot',

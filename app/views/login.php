@@ -11,7 +11,13 @@
 (function(){try{var t=localStorage.getItem('kb-theme')||'system';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
 </script>
 </head>
-<body class="login-body">
+<body class="login-body has-digit-bg">
+  <!-- 数字动态画面：纯装饰，aria-hidden 且不接鼠标事件，读屏和 Tab 都不会碰到 -->
+  <canvas id="digitBg" class="digit-bg" aria-hidden="true"></canvas>
+
+  <a class="login-repo" href="<?= e(KB_REPO_URL) ?>" target="_blank" rel="noopener noreferrer"
+     title="本系统 MIT 开源，源码在 GitHub"><?= github_mark_svg(15) ?><span>GitHub</span></a>
+
   <div class="login-wrap">
     <div class="login-card">
       <div class="login-brand">
@@ -56,5 +62,6 @@
     <?= site_footer_html() ?>
   </div>
 <script src="<?= e(asset('app.js')) ?>?v=<?= e(asset_ver('app.js')) ?>"></script>
+<script src="<?= e(asset('login-bg.js')) ?>?v=<?= e(asset_ver('login-bg.js')) ?>"></script>
 </body>
 </html>

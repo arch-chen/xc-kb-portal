@@ -100,15 +100,64 @@ function site_brand_mark(string $cls = 'brand-mark'): string
     return '<span class="' . e($cls) . '">' . $inner . '</span>';
 }
 
-/** <link rel="icon">，没配就什么都不输出（浏览器默认行为不变） */
+/**
+ * <link rel="icon"> 等一整套图标标签。
+ *
+ * 2.5.0 起「开通即有图标」：没上传自己的图标时回落到 assets/ 里的内置图标
+ * （XC 蓝色圆角方块，由 tools/make_icon.php 生成）。
+ * 上传过就只输出上传的那一张——用户自己的品牌优先，不能两套混着打架。
+ *
+ * 顺序讲究：SVG 放最前，现代浏览器优先取矢量（任何 DPI 都锐利）；
+ * apple-touch-icon 给「添加到主屏」，必须是不透明 PNG（透明底会被填黑）。
+ */
 function site_favicon_tag(): string
 {
     $src = site_brand_src('favicon');
-    return $src === '' ? '' : '<link rel="icon" href="' . e($src) . '">';
+    if ($src !== '') {
+        $v = asset_ver('icon.svg');
+        $out = '<link rel="icon" href="' . e($src) . '">' . "\n";
+        // 上传的多半是 png/ico，补一张 svg 没意义；只给 apple-touch 兜底同一张图
+        $out .= '<link rel="apple-touch-icon" href="' . e($src) . '">';
+        return $out;
+    }
+
+    $q = '?v=' . e(asset_ver('icon.svg'));
+    $q32 = '?v=' . e(asset_ver('icon-32.png'));
+    $q180 = '?v=' . e(asset_ver('icon-180.png'));
+    $out = [];
+    $out[] = '<link rel="icon" type="image/svg+xml" href="' . e(asset('icon.svg')) . $q . '">';
+    $out[] = '<link rel="icon" type="image/png" sizes="32x32" href="' . e(asset('icon-32.png')) . $q32 . '">';
+    $out[] = '<link rel="alternate icon" href="' . e(asset('favicon.ico')) . '">';
+    $out[] = '<link rel="apple-touch-icon" sizes="180x180" href="' . e(asset('icon-180.png')) . $q180 . '">';
+    return implode("\n", $out);
+}
+
+/** 内置图标地址：落地页 / 未登录页做品牌方块时用，永远有形 */
+function site_default_icon(): string
+{
+    return asset('icon.svg') . '?v=' . asset_ver('icon.svg');
 }
 
 /**
- * 页脚。四项都可空；全都空就不渲染，老站升级后外观不变。
+ * llms.txt 的真实地址（2.5.0 修）。
+ *
+ * `/llms.txt` 靠 .htaccess / nginx 的 rewrite 把 .txt 转到 llms.php，
+ * 但那是「可选的短地址」——线上实测没配 rewrite 的站，/llms.txt 是 404，
+ * 只有 /llms.php 能通。文档页原本直接写 /llms.txt，等于在没配 rewrite 的站上
+ * 挂了一堆死链。
+ *
+ * 这里不猜：装了就是 llms.php，静态文件存在才用 /llms.txt。
+ */
+function llms_url(): string
+{
+    if (is_file(BASE_PATH . '/llms.txt')) {
+        return base_path() . '/llms.txt';
+    }
+    return base_path() . '/llms.php';
+}
+
+/**
+ * 页脚。四项都可空；全都空也**仍然渲染**——因为 GitHub 入口必须一直在（2.5.0）。
  * 版权文字支持换行（用 nl2br）。
  */
 function site_footer_html(): string
@@ -130,12 +179,9 @@ function site_footer_html(): string
     if ($i['contact'] !== '') {
         $links[] = '<span class="site-foot-contact">' . e($i['contact']) . '</span>';
     }
-    if ($links) {
-        $bits[] = '<div class="site-foot-links">' . implode('<span class="site-foot-dot">·</span>', $links) . '</div>';
-    }
-    if (!$bits) {
-        return '';
-    }
+    // 仓库入口固定在最后一格，不参与上面的可空判断
+    $links[] = github_inline_link('text');
+    $bits[] = '<div class="site-foot-links">' . implode('<span class="site-foot-dot">·</span>', $links) . '</div>';
     return '<footer class="site-foot"><div class="site-foot-in">' . implode('', $bits) . '</div></footer>';
 }
 

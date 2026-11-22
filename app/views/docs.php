@@ -8,7 +8,7 @@ $base  = base_url();
 $api   = $base . '/api.php?path=';
 $mcp   = $base . '/mcp.php';
 $oas   = $base . '/openapi.php';
-$llms  = $base . '/llms.txt';
+$llms  = llms_url();
 $u     = current_user();
 $ver   = APP_VERSION;
 

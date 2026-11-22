@@ -26,14 +26,19 @@ $ver = json_decode((string)@file_get_contents($root . '/version.json'), true) ?:
 $version = (string)($ver['version'] ?? '1.0.0');
 $out = (string)($opts['out'] ?? ($root . '/dist/kb-portal-' . $version . '.zip'));
 
-$include = ['app', 'assets', 'data', 'examples', 'migrations', 'tools', '.htaccess', 'index.php', 'api.php',
+$include = ['app', 'assets', 'examples', 'migrations', 'tools', '.htaccess', 'index.php', 'api.php',
     'mcp.php', 'openapi.php', 'llms.php', 'install.php', 'version.json', 'README.md', 'DEPLOY.md',
     'nginx.example.conf', 'config.sample.php', 'LICENSE'];
 // updates.json 不进包：它是 GitHub 仓库里的发布清单（含各包 sha256），
 // 随包分发会造成「打包改变内容 → 清单 hash 失效」的循环依赖。后台在线更新实时从仓库拉取。
+//
+// data/ 也不进包（2.5.0 修）：那是「导入时把 CSV 丢进来」的落地目录，
+// 开发机上放的正是真实业务问答。以前它被写进 $include，等于每次发全量包
+// 都把 2.5 MB 真实数据打进交付物。代码不依赖它存在（import 时用户自己放），
+// 所以直接从清单里去掉；示例数据在 examples/。
 
 $skipFiles = ['config.php'];
-$skipDirs = ['storage', 'dist', '.git', '__MACOSX', 'node_modules', '__pycache__'];
+$skipDirs = ['storage', 'dist', 'data', '.git', '__MACOSX', 'node_modules', '__pycache__'];
 
 if (!is_dir(dirname($out))) {
     @mkdir(dirname($out), 0775, true);

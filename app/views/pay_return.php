@@ -34,6 +34,7 @@ $route = 'recharge';
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($head) ?> · <?= e(app_name()) ?></title>
+<?= site_favicon_tag() ?>
 <link rel="stylesheet" href="<?= e(asset('app.css')) ?>?v=<?= e(asset_ver('app.css')) ?>">
 <script>
 (function () {
@@ -102,6 +103,8 @@ $route = 'recharge';
     <div class="pr-note">
       积分通常几秒内到账。若「我的订单」仍显示待支付，点该订单的「刷新状态」会主动向支付平台查一次。
     </div>
+
+    <div class="pr-repo"><?= github_inline_link('text') ?></div>
   </div>
 </div>
 </body>

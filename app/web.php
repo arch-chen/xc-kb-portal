@@ -407,6 +407,12 @@ function ctrl_account(): void
 
 function ctrl_home(): void
 {
+    // 未登录访问根地址 → 落地页（2.5.0）。
+    // 以前直接 require_login()，陌生人点进来只看到一个登录框，不知道这是什么系统。
+    // 已登录的用户体验完全不变，仍然进工作台。
+    if (!current_user()) {
+        redirect(u('landing'));
+    }
     $u = require_login();
     $groups = visible_groups((int)$u['id']);
     $ids = array_map(fn($g) => (int)$g['id'], $groups);
@@ -1826,6 +1832,73 @@ function ctrl_file(): void
 function ctrl_branding(): void
 {
     site_brand_send(get_q('f'));
+}
+
+/**
+ * 对外落地页（2.5.0）。免登录，不查任何用户数据。
+ *
+ * 刻意不统计业务数字：groups 表没有「公开」标记，匿名访客不该知道
+ * 你库里有多少条问答——那本身就是信息泄露。登录后回工作台才看得到真实规模。
+ * 登录用户访问这里也给看（他可能就是点页脚链接过来的），按钮换成「进入工作台」。
+ */
+function ctrl_landing(): void
+{
+    view('landing', [
+        'title' => (string)site_info('subtitle') !== '' ? (string)site_info('subtitle') : '开源知识库系统',
+        'repo'  => KB_REPO_URL,
+        'aiOn'  => ai_on(),
+        'reg'   => register_allowed(),
+        'qa'    => 0,
+        'doc'   => 0,
+        'caps'  => landing_caps(),
+    ], false);
+}
+
+/**
+ * 落地页的能力清单。文案跟代码保持同步——
+ * 加了大功能记得回来改这里，不然首页会写着一件其实没有的事。
+ */
+function landing_caps(): array
+{
+    $caps = [
+        [
+            'ico'   => '🗂',
+            'title' => '分组 + 权限，边界是硬的',
+            'text'  => '知识按分组隔离，谁能读谁能写逐人配置。API Key 绑定到分组，连管理员的 Key 也跨不了组。',
+            'tags'  => ['读 / 写分权', 'Key 绑组'],
+        ],
+        [
+            'ico'   => '🔍',
+            'title' => '中文检索不用外挂',
+            'text'  => '入库时自动切二字组建索引，查询按覆盖率打分。没有 Elasticsearch，没有分词服务，SQLite 就够。',
+            'tags'  => ['二字组索引', '零依赖'],
+        ],
+        [
+            'ico'   => '🔁',
+            'title' => '写入幂等，改过留版本',
+            'text'  => '按问题指纹去重：同样的问答重复推不会变两份，答案改了才留一条历史。Agent 可以放心重跑。',
+            'tags'  => ['指纹去重', '版本历史'],
+        ],
+        [
+            'ico'   => '🔌',
+            'title' => 'REST / MCP / OpenAPI 三套口',
+            'text'  => '同一套权限，三种用法。本地 Agent 走 REST，Claude / ChatGPT 这类客户端走 MCP，要文档就给 OpenAPI。',
+            'tags'  => ['REST', 'MCP', 'OpenAPI 3.0.3'],
+        ],
+        [
+            'ico'   => '📎',
+            'title' => '附件跟随正文走',
+            'text'  => '图片和文件直传对象存储，正文里引用。驱动六套可选（本地 / S3 / OSS / COS / 七牛 / 又拍云），换存储不用改内容。',
+            'tags'  => ['六种驱动', '签名直传'],
+        ],
+        [
+            'ico'   => '🤖',
+            'title' => 'AI 是可选件，不是必需品',
+            'text'  => '要就接上模型做问答和工作台，不要就纯当知识库用。计费先扣后调、失败全额退，退出也不锁你的数据。',
+            'tags'  => ['可关', '失败退款'],
+        ],
+    ];
+    return $caps;
 }
 
 /** 后台下载 / 预览附件（管理后台 → 文件存储）：require_admin 已打后台标记，不在前台口径里 */

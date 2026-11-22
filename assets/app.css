@@ -1174,3 +1174,258 @@ html[data-theme="dark"] .tip { color: var(--muted); background: var(--bg-soft); 
   display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap;
 }
 .form label > span.lb .field-hint { margin-left: 0; }
+
+/* ============ 源码仓库入口（2.5.0，不可隐藏） ============
+   需求是「每个页面都要有、且不可隐藏」，所以样式只负责好看，不做任何
+   显示/隐藏的媒体查询——窄屏也留着（只有文字标签在超窄屏收成图标）。 */
+.gh-mark { display: block; flex: 0 0 auto; }
+
+/* 侧栏顶部那条：比菜单项醒目，因为它是身份标识不是导航 */
+.gh-side {
+  display: flex; align-items: center; gap: 8px;
+  margin: 2px 0 12px; padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--text-2); font-size: 12.5px; text-decoration: none;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.gh-side:hover {
+  color: var(--text); text-decoration: none;
+  border-color: var(--border-strong); background: var(--bg-soft);
+}
+.gh-side-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gh-side-tag {
+  flex: 0 0 auto; font-size: 10px; letter-spacing: .04em; font-weight: 600;
+  padding: 1px 5px; border-radius: 5px;
+  color: var(--accent); background: var(--accent-soft);
+}
+
+/* 胶囊按钮：落地页 / 未登录页 */
+.gh-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 14px; border-radius: 999px;
+  border: 1px solid var(--border-strong); background: var(--panel);
+  color: var(--text); font-size: 13.5px; font-weight: 550; text-decoration: none;
+  white-space: nowrap;
+}
+.gh-pill:hover { background: var(--bg-soft); text-decoration: none; border-color: var(--text-2); }
+
+/* 纯文字版：页脚用，跟着页脚配色走 */
+.gh-text {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--muted); font-size: inherit; text-decoration: none;
+}
+.gh-text:hover { color: var(--accent); text-decoration: none; }
+
+/* 支付回跳页底部那一行 */
+.pr-repo { margin-top: 14px; display: flex; justify-content: center; }
+.pr-repo .gh-text { font-size: 12px; }
+
+/* 侧栏在窄屏是抽屉，入口跟着抽屉走；顶栏另给的入口见 .land-top */
+@media (max-width: 860px) {
+  .gh-side { margin-bottom: 8px; }
+}
+
+/* ============ 落地页（2.5.0） ============ */
+.land-body { background: var(--bg); color: var(--text); }
+
+.land-top {
+  position: sticky; top: 0; z-index: 30;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.land-top-in {
+  max-width: 1120px; margin: 0 auto; padding: 12px 24px;
+  display: flex; align-items: center; gap: 20px;
+}
+.land-brand { display: flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); flex: 0 0 auto; }
+.land-brand:hover { text-decoration: none; }
+.land-brand-text { font-weight: 660; font-size: 15px; letter-spacing: -.01em; }
+.land-top-nav { display: flex; align-items: center; gap: 18px; margin-left: 8px; flex: 1 1 auto; min-width: 0; }
+.land-top-nav a { color: var(--text-2); font-size: 13.5px; text-decoration: none; white-space: nowrap; }
+.land-top-nav a:hover { color: var(--text); text-decoration: none; }
+.land-top-act { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+
+/* 首屏 */
+.land-hero { padding: 68px 24px 56px; }
+.land-hero-in { max-width: 780px; margin: 0 auto; text-align: center; }
+.land-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 13px; border-radius: 999px; margin-bottom: 24px;
+  border: 1px solid var(--border); background: var(--panel);
+  color: var(--text-2); font-size: 12.5px;
+}
+.land-h1 {
+  margin: 0 0 20px; font-size: clamp(30px, 5.2vw, 48px); line-height: 1.18;
+  font-weight: 700; letter-spacing: -.025em;
+}
+.land-h1-sub {
+  font-weight: 560; color: var(--muted);
+  font-size: .56em; letter-spacing: 0;
+  display: inline-block; margin-top: 10px;
+}
+.land-lead {
+  margin: 0 auto 32px; max-width: 620px;
+  font-size: 16px; line-height: 1.75; color: var(--text-2);
+}
+.land-cta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.btn.lg { padding: 11px 22px; font-size: 15px; border-radius: 10px; }
+.gh-cta { gap: 8px; }
+
+.land-stats {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 40px;
+  margin-top: 44px; padding-top: 28px; border-top: 1px solid var(--border);
+}
+.land-stats > div { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.land-stats b { font-size: 24px; font-weight: 680; letter-spacing: -.02em; }
+.land-stats span { font-size: 12px; color: var(--muted); }
+
+/* 通用段落 */
+.land-sec { padding: 64px 24px; }
+.land-sec-alt { background: var(--bg-soft); border-block: 1px solid var(--border); }
+.land-sec-in { max-width: 1120px; margin: 0 auto; }
+.land-sec-head { max-width: 620px; margin-bottom: 36px; }
+.land-sec-head h2 { margin: 0 0 10px; font-size: clamp(22px, 3vw, 29px); font-weight: 680; letter-spacing: -.02em; }
+.land-sec-head p { margin: 0; color: var(--text-2); font-size: 14.5px; line-height: 1.7; }
+
+/* 能力卡片 */
+.land-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.land-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 22px; transition: border-color .15s, transform .15s;
+}
+.land-card:hover { border-color: var(--border-strong); }
+.land-card-ico {
+  width: 36px; height: 36px; border-radius: 10px; margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; background: var(--accent-soft);
+}
+.land-card h3 { margin: 0 0 8px; font-size: 15.5px; font-weight: 640; letter-spacing: -.01em; }
+.land-card p { margin: 0; color: var(--text-2); font-size: 13.5px; line-height: 1.72; }
+.land-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.land-tags span {
+  font-size: 11.5px; padding: 2px 8px; border-radius: 6px;
+  color: var(--muted); background: var(--bg-soft); border: 1px solid var(--border);
+}
+
+/* 三步 */
+.land-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; max-width: 760px; }
+.land-steps li {
+  display: flex; gap: 16px; align-items: flex-start;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px 22px;
+}
+.land-step-n {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 13px; font-weight: 680;
+}
+.land-steps h3 { margin: 2px 0 6px; font-size: 15px; font-weight: 640; }
+.land-steps p { margin: 0; color: var(--text-2); font-size: 13.5px; line-height: 1.72; }
+.land-steps code {
+  font-family: var(--mono); font-size: 12.5px;
+  padding: 1px 5px; border-radius: 5px;
+  background: var(--bg-soft); border: 1px solid var(--border);
+}
+
+/* 接口三列 */
+.land-api { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.land-api-col {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
+}
+.land-api-h { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.land-api-h b { font-size: 14px; font-weight: 660; letter-spacing: .01em; }
+.land-api-h code {
+  font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+  word-break: break-all;
+}
+.land-api-col p { margin: 0; color: var(--text-2); font-size: 13.5px; line-height: 1.7; }
+.land-api-foot {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 22px;
+}
+.land-note { color: var(--muted); font-size: 12.5px; }
+
+/* 仓库大卡片 */
+.land-sec-repo { padding-top: 0; }
+.land-repo {
+  display: flex; align-items: center; gap: 26px; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 16px; padding: 32px; box-shadow: var(--shadow);
+}
+.land-repo-mark {
+  flex: 0 0 auto; width: 64px; height: 64px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-soft); color: var(--text); border: 1px solid var(--border);
+}
+.land-repo-text { flex: 1 1 320px; min-width: 0; }
+.land-repo-text h2 { margin: 0 0 8px; font-size: 21px; font-weight: 680; letter-spacing: -.02em; }
+.land-repo-text p { margin: 0; color: var(--text-2); font-size: 13.5px; line-height: 1.75; }
+
+/* 落地页页脚比内页大一点 */
+.land-body .site-foot { max-width: 1120px; margin: 0 auto; padding: 28px 24px 44px; }
+
+@media (max-width: 860px) {
+  .land-top-nav { display: none; }
+  .land-top-in { gap: 12px; padding: 10px 16px; }
+  .land-hero { padding: 44px 18px 40px; }
+  .land-sec { padding: 44px 18px; }
+  .land-stats { gap: 26px; }
+  .land-repo { padding: 22px; gap: 16px; }
+  .land-sec-repo { padding-top: 0; }
+  .land-body .site-foot { padding: 22px 18px 36px; }
+}
+
+/* ============ 登录页数字动效（2.5.0） ============
+   canvas 固定铺满视口，内容层叠在上面；pointer-events:none 保证
+   永远不会吃掉输入框的点击和光标。 */
+.login-body.has-digit-bg { position: relative; overflow-x: hidden; }
+.digit-bg {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  display: block; z-index: 0; pointer-events: none;
+}
+/* 内容压在 canvas 之上，并加一档模糊底衬托，保证表单文字始终清晰可读 */
+.login-body.has-digit-bg .login-wrap {
+  position: relative; z-index: 1;
+}
+.login-body.has-digit-bg .login-card {
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+}
+/* 页脚直接压在数字背景上会看不清，给它一层同色晕影（不是卡片，只是把底压实） */
+.login-body.has-digit-bg .site-foot {
+  position: relative; z-index: 1;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 0 0 14px 14px;
+  border-top: none;
+  padding: 12px 16px 14px;
+  margin: -2px 10px 0;
+}
+
+/* 右上角常驻的仓库入口（不可隐藏，窄屏也在） */
+.login-repo {
+  position: fixed; top: 16px; right: 18px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 86%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  color: var(--text-2); font-size: 12.5px; text-decoration: none;
+}
+.login-repo:hover { color: var(--text); border-color: var(--border-strong); text-decoration: none; }
+
+/* 减少动效：不跑 canvas，直接铺一层纯色，避免白闪 */
+@media (prefers-reduced-motion: reduce) {
+  .digit-bg { display: none; }
+  .login-body.has-digit-bg { background: var(--bg); }
+}
+
+@media (max-width: 520px) {
+  .login-repo { top: 12px; right: 12px; padding: 5px 10px; font-size: 12px; }
+  /* 窄屏卡片本身贴近边缘，页脚跟着对齐，否则左边会缩进去一截 */
+  .login-body.has-digit-bg .site-foot { margin: -2px 0 0; border-radius: 0 0 12px 12px; }
+}
