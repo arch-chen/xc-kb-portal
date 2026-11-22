@@ -2,9 +2,9 @@
     "schema": 1,
     "repo": "arch-chen/xc-kb-portal",
     "branch": "main",
-    "generated_at": "2026-11-21T15:49:51+00:00",
-    "current_src": "2.4.1",
-    "latest": "2.4.1",
+    "generated_at": "2026-11-22T05:04:04+00:00",
+    "current_src": "2.5.0",
+    "latest": "2.5.0",
     "releases": [
         {
             "version": "1.1.0",
@@ -302,6 +302,15 @@
             "zip": "update-2.4.1.zip",
             "sha256": "cb16b13b7abb45b43a0feb50c4fd2a06a901de17172a08461e52c157c0c7738c",
             "size": 428847
+        },
+        {
+            "version": "2.5.0",
+            "min_version": "2.4.1",
+            "released": "2026-11-22",
+            "notes": "对外形象补齐：正式首页 + 全站来源入口 + 默认图标 + 登录页数字动效。① 新增对外落地页（index.php?r=landing，免登录）：以前根地址直接 require_login()，陌生人点进来只有一个登录框，不知道这套系统是干什么的。现在未登录访问根地址会看到正式首页——首屏讲清定位，中间六张能力卡片（分组权限 / 中文检索 / 幂等写入 / 三种接口 / 附件跟随 / AI 可选），接着三步上手与 REST / MCP / OpenAPI 三列说明，底部一张仓库大卡片。站点名、副标题、简介、logo 全部读 site_info()，别人装了改个名就是自己的站。已登录用户访问根地址仍然是工作台，习惯不变。② 全站常驻 GitHub 仓库入口，且不可隐藏：源码里写死常量 KB_REPO_URL，不读 settings、不做权限判断、后台也没有对应开关——装了就是 MIT 开源版，出处必须一直看得见。展示位：登录后侧栏顶部（品牌行下方，带 MIT 角标）、页脚（site_footer_html 固定追加，全站所有页面都吃得到）、登录页右上角浮标、注册 / 忘记密码 / 开发文档 / 支付回跳页。③ 补齐默认网站图标：以前 favicon 默认为空，新站开出来浏览器标签上一个图标都没有。现在内置一套 assets/icon.svg + icon-32/16/180.png + favicon.ico（蓝色圆角方块 + XC 字样，用 tools/make_icon.php 纯 PHP 手写 PNG 流生成，不依赖 GD）。没上传自己的图标时自动回落内置那套，上传过就只用上传的，站方品牌优先。标签输出顺序 SVG → 32px PNG → ico 兜底 → apple-touch-icon，高分屏取矢量最锐利。④ 登录入口数字动态画面：canvas 铺满视口做数字雨背景，只用 0-9 与 A-F 随机字形。五条硬约束：pointer-events:none 绝不拦输入框、aria-hidden 对读屏隐藏、prefers-reduced-motion:reduce 时不启动只铺静态底、标签页隐藏时停 rAF、手机降列密度与帧率（24→15fps）且 DPR 封顶 2 省一半像素。亮暗主题各自配色，跟 CSS 变量同步。⑤ 修掉一个打包泄露：全量包的 include 清单里原来写着 data/，而那是「导入时把 CSV 丢进来」的落地目录，开发机上放的正是 2.5 MB 真实业务问答——等于每次发全量包都把真实数据打进交付物（历史包 2.4.0 / 2.4.1 都有）。代码并不依赖这个目录存在，已从清单移除并加进 skipDirs，全量包从 1.4 MB 降到 0.5 MB。更新包本来就跳过 data，GitHub 仓库的 .gitignore 也早就排除了它（已核 git 历史，该 CSV 从未被提交），所以线上与仓库没有外泄；只是本地交付物需要修干净。⑥ 顺带修一个真 bug：开发文档页与 llms 链接原先硬编码 /llms.txt，但那靠 .htaccess / nginx 的 rewrite 转发，线上实测没配 rewrite 的站访问 /llms.txt 是 404（只有 /llms.php 通），等于挂了一堆死链。新增 llms_url()：静态文件存在才用 .txt，否则回退 .php。地址与 API 全部不变，升级不动数据库；发版仍直推 GitHub、后台点在线更新，手动上传 zip 的离线入口保留",
+            "zip": "update-2.5.0.zip",
+            "sha256": "4dcda3e2e488047d0891b546e26ded08468cb4ef1e3fa77bb36445d2606edcaf",
+            "size": 458160
         }
     ]
 }
