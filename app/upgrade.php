@@ -147,6 +147,47 @@ function upgrade_apply(string $zipPath, ?string $curVersion = null): array
             $migDone[] = $name;
         }
 
+        // 4.5) 删除清单：更新包覆盖文件不会删旧文件，废弃的视图/脚本会一直留着。
+        // 包里带 delete.txt（每行一个站点相对路径，# 开头是注释）就逐条删掉。
+        // 2.6.0 起需要它：login.php / register.php / login-bg.js 已被 auth.php / auth-bg.js 取代，
+        // 不过来删的话，老站升级后这些文件还在，直链还能打开一个孤立的旧页面。
+        $deleted = 0;
+        $delList = $zip->getFromName($prefix . 'delete.txt');
+        if (is_string($delList) && trim($delList) !== '') {
+            foreach (preg_split('/\R/', $delList) ?: [] as $line) {
+                $rel = trim($line);
+                if ($rel === '' || str_starts_with($rel, '#')) {
+                    continue;
+                }
+                $rel = str_replace('\\', '/', $rel);
+                // 同样的路径安全检查 + 同样的受保护清单：删除比写入更危险，
+                // 绝不允许清单里写 ../ 或 storage/ 把用户数据删掉。
+                if (!upgrade_safe_path($rel)) {
+                    $failed[] = 'delete:' . $rel . '（非法路径）';
+                    continue;
+                }
+                $hit = false;
+                foreach ($blocked as $b) {
+                    if ($rel === $b || str_starts_with($rel, $b)) {
+                        $hit = true;
+                        break;
+                    }
+                }
+                if ($hit) {
+                    $failed[] = 'delete:' . $rel . '（受保护，已跳过）';
+                    continue;
+                }
+                $p = BASE_PATH . '/' . $rel;
+                if (is_file($p)) {
+                    if (@unlink($p)) {
+                        $deleted++;
+                    } else {
+                        $failed[] = 'delete:' . $rel . '（删除失败，检查文件权限）';
+                    }
+                }
+            }
+        }
+
         // 5) 更新版本文件
         @file_put_contents(BASE_PATH . '/version.json',
             json_encode($newVer, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n");
@@ -163,6 +204,9 @@ function upgrade_apply(string $zipPath, ?string $curVersion = null): array
 
         audit('upgrade', "v$cur → v$to" . ($migDone ? ' 迁移:' . implode(',', $migDone) : ''));
         $msg = "已升级到 v{$to}，覆盖 {$copied} 个文件";
+        if ($deleted > 0) {
+            $msg .= "，清理 {$deleted} 个废弃文件";
+        }
         if ($migDone) {
             $msg .= '，执行迁移 ' . implode(', ', $migDone);
         }

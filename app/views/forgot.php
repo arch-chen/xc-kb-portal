@@ -14,6 +14,13 @@ $f = flash();
 </script>
 </head>
 <body class="login-body">
+<?php /* 找回密码沿用登录那套背景，观感与登录页一致（2.6.0） */ ?>
+<div class="auth-bg-stack" aria-hidden="true">
+  <div class="auth-bg-layer"><?= auth_bg_html('login') ?></div>
+</div>
+
+<?= github_corner_link('fixed') ?>
+
   <div class="login-wrap">
     <div class="login-card">
       <div class="login-brand">
@@ -96,5 +103,8 @@ $f = flash();
     <?= site_footer_html() ?>
   </div>
 <script src="<?= e(asset('app.js')) ?>?v=<?= e(asset_ver('app.js')) ?>"></script>
+<?php if (auth_bg_get('login')['type'] === 'preset'): ?>
+<script src="<?= e(asset('auth-bg.js')) ?>?v=<?= e(asset_ver('auth-bg.js')) ?>"></script>
+<?php endif; ?>
 </body>
 </html>

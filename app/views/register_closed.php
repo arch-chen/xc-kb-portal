@@ -12,6 +12,7 @@
 </script>
 </head>
 <body class="login-body">
+<?= github_corner_link('fixed') ?>
   <div class="login-wrap">
     <div class="login-card">
       <div class="login-brand">

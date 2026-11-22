@@ -36,8 +36,6 @@ $isAdmin = $u ? is_admin($u) : false;
       <span class="brand-text"><?= e(app_name()) ?></span>
     </a>
 
-    <?= github_side_link() ?>
-
     <form class="side-search" action="<?= e(u('search')) ?>" method="get">
       <input type="hidden" name="r" value="search">
       <input type="search" name="q" placeholder="搜索…" value="<?= e(get_q('q')) ?>">
@@ -90,6 +88,8 @@ $isAdmin = $u ? is_admin($u) : false;
     <div class="topbar">
       <button class="menu-btn" type="button" id="menuBtn" aria-label="菜单">☰</button>
       <a class="who" href="<?= e(u('account')) ?>" title="账户设置"><?= e($u ? ($u['display_name'] ?: $u['username']) : '未登录') ?><?= $isAdmin ? ' · 管理员' : '' ?></a>
+      <span class="topbar-spacer"></span>
+      <?= github_corner_link('inline') ?>
     </div>
 
     <?php if ($f): ?>

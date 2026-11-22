@@ -48,6 +48,7 @@ function nav_sub_tabs(string $route): array
             ['admin_ai',       'AI 与套餐', u('admin_ai')],
             ['admin_pay',      '支付',      u('admin_pay')],
             ['admin_mail',     '邮件',      u('admin_mail')],
+            ['admin_auth',     '登录外观',  u('admin_auth')],
             ['admin_system',   '系统与升级', u('admin_system')],
         ];
         // 条目编辑属于「内容」的下一层，横向子菜单仍高亮「内容」

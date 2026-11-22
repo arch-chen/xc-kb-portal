@@ -76,7 +76,13 @@ function site_brand_is_file(string $v): bool
 
 /**
  * 图片地址：上传的走 r=branding 输出，外链/站内路径原样返回。
- * $slot 为 'logo' 或 'favicon'。
+ * $slot 为 'logo' | 'favicon' | 'bg'。
+ *
+ * 2.6.0 加一道存在性校验：settings 里记着文件名、磁盘上却没有这个文件时返回空串，
+ * 让调用方回落到默认值（图标回落内置那套、背景回落预设动画）。
+ * 起因是实测碰到一个站：换过几次图标，最后一张被清掉但 site_favicon 还指着它，
+ * 于是每个页面都带一个 404 的 <link rel="icon">，浏览器标签一片空白还没人知道为什么。
+ * 背景图同理——丢了图如果不回落，登录页背景就是一整片黑。
  */
 function site_brand_src(string $slot): string
 {
@@ -85,6 +91,9 @@ function site_brand_src(string $slot): string
         return '';
     }
     if (site_brand_is_file($v)) {
+        if (!is_file(site_brand_dir() . '/' . $v)) {
+            return '';
+        }
         return u('branding', ['f' => $v]);
     }
     return $v;
@@ -157,8 +166,11 @@ function llms_url(): string
 }
 
 /**
- * 页脚。四项都可空；全都空也**仍然渲染**——因为 GitHub 入口必须一直在（2.5.0）。
- * 版权文字支持换行（用 nl2br）。
+ * 页脚。四项都可空；全都空就返回空串，不再强行渲染。
+ *
+ * 2.6.0 起页脚不再带 GitHub 入口——按需求「每个页面只需要在右上角预留一个即可」，
+ * 入口统一收敛到右上角（github_corner_link()），页脚只管备案与版权。
+ * 所以这里恢复成「无内容则不输出」，登录页也不用为了容纳入口而给页脚做特殊处理。
  */
 function site_footer_html(): string
 {
@@ -179,9 +191,12 @@ function site_footer_html(): string
     if ($i['contact'] !== '') {
         $links[] = '<span class="site-foot-contact">' . e($i['contact']) . '</span>';
     }
-    // 仓库入口固定在最后一格，不参与上面的可空判断
-    $links[] = github_inline_link('text');
-    $bits[] = '<div class="site-foot-links">' . implode('<span class="site-foot-dot">·</span>', $links) . '</div>';
+    if ($links) {
+        $bits[] = '<div class="site-foot-links">' . implode('<span class="site-foot-dot">·</span>', $links) . '</div>';
+    }
+    if (!$bits) {
+        return '';
+    }
     return '<footer class="site-foot"><div class="site-foot-in">' . implode('', $bits) . '</div></footer>';
 }
 
@@ -266,6 +281,8 @@ function site_save(array $post, array $files = []): array
 /**
  * 存一张品牌图。只允许位图，明确拒绝 svg——
  * svg 直接被浏览器打开时会执行脚本，放个 <img> 里看不见，但直链访问就是 XSS。
+ *
+ * $slot: 'logo' | 'favicon' | 'bg'（登录页背景图，2.6.0）
  */
 function site_brand_upload(array $f, string $slot, int $maxKb): array
 {

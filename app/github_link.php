@@ -2,19 +2,20 @@
 declare(strict_types=1);
 
 /**
- * 源码仓库入口（2.5.0）
+ * 源码仓库入口（2.5.0 建立，2.6.0 收敛为「每页右上角唯一一处」）
  *
- * 需求原话：「用户使用了本系统并安装成了网站以后，每个页面都要显示有连接 github 仓库的入口，
- * 并且这个入口不可隐藏。」
+ * 需求原话（2.5.0）：「用户使用了本系统并安装成了网站以后，每个页面都要显示有连接 github
+ * 仓库的入口，并且这个入口不可隐藏。」
+ * 需求原话（2.6.0）：「github 入口，每个页面只需要在右上角预留一个即可。」
  *
- * 所以这里有一处刻意的不设计：**没有开关、不读 settings、不做权限判断**。
+ * 于是这里有一处刻意的不设计：**没有开关、不读 settings、不做权限判断**。
  * 后台也没有对应表单项——装了就是 MIT 开源版，出处必须一直看得见。
  * 谁想拿掉得改代码，改了就违反 MIT 的署名要求，责任在改的人身上。
  *
- * 展示位置：
- *   - 已登录：侧栏最上方（品牌行下面），一眼可见
- *   - 未登录：登录 / 注册 / 找回密码 / 落地页，各自渲染一份
- *   - 页脚：site_footer_html() 里也会带一个，微信里分享出去照样能点回仓库
+ * 展示位置：全站统一放在右上角，一处，不重复。
+ *   - 有布局的页面：主区顶栏 .topbar 的最右侧（跟着内容走，滚动可见）
+ *   - 独立页面（登录/注册、文档、支付回跳、落地页）：固定悬浮在视口右上角
+ * 两种形态同一个函数出，样式类名一致，只是定位方式不同。
  */
 
 /** 仓库地址。写死常量而不是配置项——配置项意味着可关可改，那就不是「不可隐藏」了。 */
@@ -34,28 +35,23 @@ function github_mark_svg(int $size = 16): string
 }
 
 /**
- * 侧栏版入口：带文字、星标角标。
- * 放在侧栏顶部而不是折叠菜单里——折叠等于可隐藏。
+ * 全站唯一的仓库入口（右上角）。
+ *
+ * $variant:
+ *   'fixed'  —— 固定悬浮在视口右上角。独立页面（登录/注册、文档、支付回跳、落地页）用。
+ *   'inline' —— 参与文档流，由父容器（主区 .topbar）摆到右侧。带布局的页面用。
+ *
+ * $label 传空串只显示图标（窄屏自动这样，省地方）。
  */
-function github_side_link(): string
+function github_corner_link(string $variant = 'fixed', string $label = ''): string
 {
-    return '<a class="gh-side" href="' . e(KB_REPO_URL) . '" target="_blank" rel="noopener noreferrer"'
+    if ($label === '') {
+        $label = $variant === 'inline' ? 'GitHub' : 'GitHub';
+    }
+    $cls = 'gh-corner' . ($variant === 'inline' ? ' gh-corner-inline' : ' gh-corner-fixed');
+    return '<a class="' . $cls . '" href="' . e(KB_REPO_URL) . '" target="_blank" rel="noopener noreferrer"'
         . ' title="本系统 MIT 开源，源码与问题反馈都在 GitHub">'
         . github_mark_svg(15)
-        . '<span class="gh-side-text">GitHub 开源</span>'
-        . '<span class="gh-side-tag">MIT</span>'
-        . '</a>';
-}
-
-/**
- * 行内版入口：未登录页与落地页用。
- * $variant: 'pill'（默认，胶囊按钮）| 'text'（纯文字链接，页脚用）
- */
-function github_inline_link(string $variant = 'pill', string $label = 'GitHub 开源仓库'): string
-{
-    $cls = $variant === 'text' ? 'gh-text' : 'gh-pill';
-    return '<a class="' . $cls . '" href="' . e(KB_REPO_URL) . '" target="_blank" rel="noopener noreferrer">'
-        . github_mark_svg($variant === 'text' ? 14 : 15)
-        . '<span>' . e($label) . '</span>'
+        . '<span class="gh-corner-text">' . e($label) . '</span>'
         . '</a>';
 }

@@ -24,7 +24,52 @@ function ctrl_login(): void
             $err = '账号或密码不正确';
         }
     }
-    view('login', ['err' => $err, 'title' => '登录'], false);
+    auth_view('login', ['loginErr' => $err]);
+}
+
+/**
+ * 登录 / 注册共用的渲染入口（2.6.0）。
+ *
+ * 两个页面合成一张 16:9 卡片、卡内切 tab，所以这里统一出参：
+ * 哪个 tab 出错就默认停在哪个 tab，用户改完直接再提交，不用重新点一次。
+ */
+function auth_view(string $mode, array $extra = []): void
+{
+    $mailVerify = mail_register_verify();
+    view('auth', array_merge([
+        'title'     => $mode === 'register' ? '注册' : '登录',
+        'mode'      => $mode,
+        'loginErr'  => '',
+        'regErr'    => '',
+        'regOpen'   => register_allowed(),
+        'mailReady' => mail_ready(),
+        'reg'       => [
+            'question'     => $mailVerify ? '' : captcha_new(),
+            'limit'        => register_limit(),
+            'mailVerify'   => $mailVerify,
+            'mailOptional' => !$mailVerify && mail_ready(),
+        ],
+    ], $extra), false);
+}
+
+/**
+ * 可直接打开某个 tab 的入口（2.6.0）。
+ *
+ * 老链接 `?r=register` 仍然有效（goto 到新地址并保留 mode），
+ * 这样已有书签、已发出的注册邀请链接不会 404。
+ */
+function ctrl_auth(): void
+{
+    if (current_user()) {
+        redirect(u());
+    }
+    $m = get_q('m') === 'register' ? 'register' : 'login';
+    if ($m === 'register' && !register_allowed()) {
+        http_response_code(403);
+        view('register_closed', ['title' => '注册已关闭'], false);
+        return;
+    }
+    auth_view($m);
 }
 
 function ctrl_logout(): void
@@ -50,10 +95,8 @@ function ctrl_register(): void
     }
 
     $mailVerify = mail_register_verify();
-    $mailOptional = !$mailVerify && mail_ready();
 
-    $err = '';
-    if (is_post()) {
+    $err = '';    if (is_post()) {
         csrf_check();
         $username = post('username');
         $pwd = post('password');
@@ -119,14 +162,7 @@ function ctrl_register(): void
         }
     }
 
-    view('register', [
-        'title'      => '注册',
-        'err'        => $err,
-        'question'   => $mailVerify ? '' : captcha_new(),
-        'limit'      => register_limit(),
-        'mailVerify' => $mailVerify,
-        'mailOptional' => $mailOptional,
-    ], false);
+    auth_view('register', ['regErr' => $err]);
 }
 
 /* ---------------- 发邮件验证码（AJAX） ---------------- */
@@ -1255,6 +1291,43 @@ function ctrl_admin_system(): void
         'perHour' => register_limit(),
         'userCount' => (int)val('SELECT COUNT(*) FROM ' . tbl('users'), [], 0),
         'spaceCount' => (int)val('SELECT COUNT(*) FROM ' . tbl('groups') . ' WHERE owner_id > 0', [], 0),
+    ]);
+}
+
+/* ---------------- 登录 / 注册外观（2.6.0） ---------------- */
+
+function ctrl_admin_auth(): void
+{
+    require_admin();
+    $msg = '';
+    $err = '';
+
+    if (is_post()) {
+        csrf_check();
+        $act = (string)($_POST['action'] ?? '');
+
+        if ($act === 'auth_bg') {
+            $r = auth_bg_save($_POST, $_FILES);
+            if ($r['ok']) {
+                audit('update_auth_bg',
+                    'login=' . auth_bg_get('login')['type'] . '/' . mb_substr(auth_bg_get('login')['value'], 0, 40, 'UTF-8')
+                    . ' register=' . auth_bg_get('register')['type']);
+                flash($r['message']);
+                redirect(u('admin_auth'));
+            }
+            $err = $r['error'];
+        }
+    }
+
+    view('admin_auth', [
+        'title'     => '登录外观',
+        'msg'       => $msg,
+        'err'       => $err,
+        'presets'   => auth_bg_presets(),
+        'slots'     => auth_bg_slots(),
+        'cfgLogin'  => auth_bg_get('login'),
+        'cfgReg'    => auth_bg_get('register'),
+        'regOpen'   => register_allowed(),
     ]);
 }
 

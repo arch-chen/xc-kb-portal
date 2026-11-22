@@ -55,9 +55,9 @@ if ($sub === '') {
       <a href="#start">怎么用</a>
       <a href="#api">接口</a>
       <a href="<?= e(llms_url()) ?>">llms.txt</a>
-      <?= github_inline_link('text', 'GitHub') ?>
     </nav>
     <div class="land-top-act">
+      <?= github_corner_link('inline') ?>
       <?php if (current_user()): ?>
         <a class="btn primary" href="<?= e(u()) ?>">进入工作台</a>
       <?php else: ?>

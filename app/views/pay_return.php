@@ -59,6 +59,7 @@ $route = 'recharge';
 </style>
 </head>
 <body>
+<?= github_corner_link('fixed') ?>
 <div class="pr-wrap">
   <div class="pr-card">
     <div class="pr-kicker"><?= e(app_name()) ?></div>
@@ -104,7 +105,6 @@ $route = 'recharge';
       积分通常几秒内到账。若「我的订单」仍显示待支付，点该订单的「刷新状态」会主动向支付平台查一次。
     </div>
 
-    <div class="pr-repo"><?= github_inline_link('text') ?></div>
   </div>
 </div>
 </body>

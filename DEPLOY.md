@@ -957,6 +957,9 @@ svg 被浏览器直链打开时会执行里面的脚本，属于存储型 XSS。
 
 ### 19.2 GitHub 入口为什么不可隐藏
 
+> **2.6.0 已改**：入口从「侧栏 + 页脚 + 多页面各一份」收敛为**每页右上角唯一一处**。
+> 下面这段讲的是「不可隐藏」这条原则，位置变了但原则没变。新的形态见 20.5。
+
 需求原话是「每个页面都要显示有连接 github 仓库的入口，并且这个入口不可隐藏」，
 所以 `app/github_link.php` 里有一处**刻意的不设计**：
 
@@ -967,19 +970,9 @@ const KB_REPO_URL = 'https://github.com/arch-chen/xc-kb-portal';
 - 不是 settings 项（配置项意味着可关可改，那就不叫不可隐藏）
 - 不做权限判断（普通用户、管理员、未登录访客都看得到）
 - 后台没有对应表单项
-- `site_footer_html()` 里**无条件**追加，所以连「站点信息全空」的老站也有
-- 工作台 `.main-agent` 用 CSS 把页脚藏了（整屏布局没空间），但**侧栏入口仍在**
 
-三个渲染函数：
-
-| 函数 | 用在哪 | 形态 |
-|---|---|---|
-| `github_side_link()` | 登录后侧栏顶部 | 图标 + 「GitHub 开源」+ MIT 角标 |
-| `github_inline_link('pill')` | 落地页首屏 CTA | 胶囊按钮 |
-| `github_inline_link('text')` | 页脚 / 支付回跳页 | 纯文字链接 |
-
-都带 `target="_blank" rel="noopener noreferrer"`。`noopener` 不是可选项——
-少它的话，新开的仓库页能用 `window.opener` 把你的登录页重定向到钓鱼站。
+> 2.6.0 起不再「页脚无条件追加」——那是为放一个入口而造一个只有 GitHub 的页脚，
+> 用户明确要求只留右上角一处。现在 `site_footer_html()` 四项全空就返回空串。
 
 ### 19.3 默认图标：开通即有
 
@@ -1007,7 +1000,10 @@ assets/favicon.ico     16+32 双尺寸，老浏览器 / 直接访问 /favicon.ic
 
 ### 19.4 登录页数字动效的五条约束
 
-`assets/login-bg.js`，纯 canvas、零依赖、不请求任何资源。写的时候守了五条：
+> **2.6.0 已升级**：`assets/login-bg.js` 已删除，数字雨成为 10 套预设之一（`digits`），
+> 引擎统一在 `assets/auth-bg.js`，五条约束原样继承并扩展到全部 10 套。详见 20.2。
+
+`assets/login-bg.js`（历史），纯 canvas、零依赖、不请求任何资源。写的时候守了五条：
 
 1. **不抢焦点** —— `pointer-events: none`，输入框的点击和光标不受影响。
    曾用 CDP 验过：`elementFromPoint(视口中心)` 命中的是 `INPUT`，不是 `CANVAS`。
@@ -1030,3 +1026,245 @@ assets/favicon.ico     16+32 双尺寸，老浏览器 / 直接访问 /favicon.ic
 开发文档页原本直接写 `/llms.txt`，等于在没配 rewrite 的站上挂一堆死链。
 
 现在统一走 `llms_url()`：静态文件存在才用 `.txt`，否则回退 `.php`。**别硬编码 `/llms.txt`。**
+
+---
+
+## 20. 登录/注册合一与动态背景（2.6.0 起）
+
+### 20.1 一张 16:9 的卡，两个 tab，不换页
+
+以前是两个独立页面（`?r=login` / `?r=register`），点「注册」整页刷新：URL 变了、
+刚填的账号密码没了、页面还要重新解析一遍资源。现在合并成一个视图 `app/views/auth.php`。
+
+结构：
+
+```
+.auth-bg-stack          两层背景（登录一套、注册一套，切 tab 时只让当前那层跑）
+.github-corner-fixed    右上角唯一入口
+.auth-card              16:9 卡片，grid-template-columns: 1fr 1fr
+  .auth-aside           左：品牌栏（窄屏隐藏）
+  .auth-main            右：.auth-tabs + .auth-panes
+    .auth-tabs          两个 tab + 一个滑动块 .auth-tab-ink
+    .auth-panes         grid-area:1/1 把两个面板叠在一起
+      #paneLogin
+      #paneRegister
+```
+
+**两个面板都完整渲染在 DOM 里**，不是异步加载。三个原因：
+
+1. 切 tab 零延迟，没有「转一下圈」的空档；
+2. 密码管理器（1Password / Chrome）能同时看见两个表单；
+3. 服务端渲染，键盘用户和禁用 JS 的爬虫都拿得到内容。
+
+切 tab 的 JS 在 `auth.php` 底部，约 80 行，**刻意不写 `history`**：
+一旦 `pushState`，后退键就变成在两个 tab 之间反复横跳，用户按返回会被困住。
+URL 里带 `?m=register` 只用于「直接打开注册」和「注册失败后回到注册 tab」两种情况。
+
+**旧地址全部保留**：`?r=login` 与 `?r=register` 仍能访问，落到对应的 tab，
+不破坏书签、签名邮件里的链接、以及别人写在文档里的地址。`?r=auth&m=register` 是新的规范地址。
+
+### 20.2 16:9 是怎么定住的（以及为什么要有三处 `min-height: 0`）
+
+```css
+.auth-card {
+  aspect-ratio: 16 / 9;
+  min-height: 480px;               /* 矮屏兜底：宁可超出比例，也不挤成一条缝 */
+  max-height: calc(100vh - 96px);  /* 高屏别顶出视口 */
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr);  /* ← 见下 */
+  overflow: hidden;
+}
+```
+
+**踩过的坑**：一开始没写 `grid-template-rows`，默认 `auto` 行按内容高度算，
+注册表单 691px 就把 608px 的卡片撑开了，`overflow: hidden` 再把超出的部分切掉——
+「注册并进入」连同下面的密码规则说明全被裁在卡片外，看起来像按钮消失了。
+
+修法是三处 `min-height: 0` + 一个 `minmax(0, 1fr)`，缺一不可：
+
+| 位置 | 为什么 |
+|---|---|
+| `.auth-card { grid-template-rows: minmax(0,1fr) }` | 行高别按内容算，锁死 1fr |
+| `.auth-main { min-height: 0 }` | grid item 默认 `min-height:auto`，会顶破行 |
+| `.auth-panes { grid-template-rows: minmax(0,1fr) }` | 面板容器同样别按内容算 |
+| `.auth-pane { min-height: 0 }` | flex 子项默认 `min-height:auto`，会让 `.auth-scroll` 拿不到确切高度 |
+
+改这几条之前先量一遍：1440×900 下卡片应是 **1080×607.5**（`.auth-stage` max-width 1080）。
+
+注册表单的**主按钮钉在底部**（`.auth-foot`），只有字段区滚动。理由很实际：
+按钮要滚下去才看得见的话，很多人会以为页面坏了。1440 / 1600 / 1280 三个常用宽度下
+实测已完全不滚动，只有 1100 宽这类小屏才滚十几像素——这是留的兜底，不是缺陷。
+
+**窄屏放弃 16:9**（`@media (max-width: 900px)`）：390 宽的 16:9 只有 219px 高，
+而注册表单至少要 480px。这里观感让位于可用性，改成单栏、隐藏左品牌栏、
+取消内部滚动（整页滚）。窄屏分支必须用 `.auth-form-fill .auth-scroll` 这种同特指度
+去覆盖，只写 `.auth-scroll { overflow: visible }` 是盖不住的。
+
+### 20.3 10 套内置背景
+
+`assets/auth-bg.js`，纯 canvas，零依赖，不请求任何外部资源。
+
+| key | 名称 | 一句话 |
+|---|---|---|
+| `digits` | 数字雨 | 0-9 与 A-F 从上方落下（2.5.0 的观感，升级后默认还是它） |
+| `stars` | 星域 | 缓慢漂移的星点，偶尔划过流星 |
+| `aurora` | 极光 | 青紫光带横向流动 |
+| `net` | 粒子连线 | 最近邻连线，距离越近越亮 |
+| `ripple` | 波纹 | 同心圆由中心向外扩散 |
+| `grid` | 矩阵网格 | 透视网格向前推进，带扫描线 |
+| `gradient` | 渐变流光 | 大面积色块缓慢呼吸，最省电 |
+| `shapes` | 几何漂浮 | 方块与三角缓慢旋转 |
+| `stream` | 代码流 | 纵向字符流，密度比数字雨低 |
+| `orbs` | 光斑呼吸 | 几团模糊光斑明暗起伏 |
+
+每套是一个工厂函数 `bgXxx(ctx, W, H, small)`，返回 `{ draw, still }`。加第 11 套只需两步：
+写一个工厂函数、往 `FACTORY` 表里登记一行；后台的缩略图网格会自动多一格
+（缩略图靠 `thumb(canvas, kind)` 里逐 kind 分支画代表图形，与真实引擎解耦，
+因为后台同时跑 10 个 rAF 会卡）。
+
+**五条硬约束**（全部 10 套都遵守）：
+
+1. **不抢焦点** —— `pointer-events: none`，输入框的点击和光标不受影响。
+2. **不吵读屏** —— `aria-hidden="true"`，Tab 也到不了。
+3. **尊重减少动效** —— `prefers-reduced-motion: reduce` 时不启动 rAF，只画一帧静态。
+4. **不后台烧电** —— `visibilitychange` 切走就 `cancelAnimationFrame`。
+5. **手机省着来** —— 帧率 15（桌面 24）、`Math.min(devicePixelRatio, 2)` 封顶。
+
+**切 tab 只让一层跑**：登录和注册各有一层背景，都在 DOM 里。`AuthBg.activate(canvas)`
+把其余层 `setActive(false)`——停 rAF 并留一帧静态。两套同时跑纯属白烧 CPU。
+
+`setActive()` 里有个必须做的小事：**把 `data-active` 属性同步写回去**。
+只改内存变量的话，属性会永远停在服务端渲染时的初始值（实测切到注册后
+登录层还挂着 `data-active="1"`），CSS、测试断言、resize 重建全都读到错的。
+另外该层之前 `hidden` 时 `clientWidth` 是 0，所以第一次亮起要重新 `measure()`。
+
+### 20.4 后台「登录外观」页
+
+位置：后台子菜单「邮件」与「系统与升级」之间。控制器 `ctrl_admin_auth()`，
+视图 `app/views/admin_auth.php`，配置读写全在 `app/authbg.php`。
+
+登录、注册**两个槽位各自独立**，每个槽位五种来源任选：
+
+| 类型 | 存什么 | 说明 |
+|---|---|---|
+| `preset` | 预设 key | 10 套内置之一 |
+| `image` | 文件名 或 URL | 上传存 `storage/branding/bg-xxxx.png`，经 `?r=branding&f=` 输出 |
+| `url` | URL | 图片或 mp4/webm 直链；按扩展名决定 `<img>` 还是 `<video>` |
+| `code` | HTML/CSS/JS 片段 | 跑在 sandbox iframe 里（见 20.5） |
+| `none` | 空 | 纯色背景，不跑任何动画 |
+
+外加 **0-90% 压暗滑块**：遮罩铺在背景之上、卡片之下（`.auth-bg::after`，`opacity: var(--auth-dim)`），
+卡片本身永远清晰。默认 0（与 2.5.0 观感一致，老站升级看不出变化）。
+
+上传限制 4096 KB，**拒绝 SVG**（直链可执行脚本）。图片丢失时自动回落内置预设，
+不会留一个 404 的 `<img>` 把登录页变成一片黑。
+
+> **注意**：`storage/branding/` 在 nginx 规则里是被 deny 的（见第 4 节），
+> 所以品牌图/背景图不能直链，必须走 `?r=branding&f=文件名`。这是有意的。
+
+### 20.5 自定义代码的 sandbox 边界（这条不是可选项）
+
+管理员粘贴的任意 HTML/JS，如果**直接内联**进页面，它能：
+
+- 读同源 cookie → 拿到会话
+- 读 localStorage 里的 token
+- 用 `parent.document` 改掉登录表单的 `action` → 钓走密码
+
+所以一律塞进 sandbox iframe：
+
+```html
+<iframe sandbox="allow-scripts" scrolling="no"
+        referrerpolicy="no-referrer" srcdoc="..."></iframe>
+```
+
+三条细节，每条都有代价：
+
+1. **只给 `allow-scripts`，绝不给 `allow-same-origin`。**
+   两个都给等于没沙箱——同源 iframe 里能直接 `parent.document` 操作顶层页面。
+   只给 `allow-scripts` 时它是不透明源：能跑自己的动画，碰不到站点数据。
+2. **用 `srcdoc` 而不是落地成 `.html` 文件。**
+   落地文件一旦被直链访问就是同源 XSS，而且还得管清理。
+   `srcdoc` 的内容只在这个受限 iframe 里活着。
+3. **外壳写死**：`html,body{margin:0;height:100%;background:transparent;overflow:hidden}`。
+   管理员只写动画本身，不用操心居中、铺满、边框。
+
+代码上限 60 KB，空代码会被拒（否则留一个空白 iframe，背景一片透明）。
+
+### 20.6 GitHub 入口：从「到处都有」收敛为「右上角一处」
+
+需求原话（2.6.0）：「github 入口，每个页面只需要在右上角预留一个即可。」
+
+于是 2.5.0 那套全部删掉：
+
+- `github_side_link()`（侧栏，带 MIT 角标）→ 删
+- `github_inline_link('pill'|'text')` → 删
+- `site_footer_html()` 里的无条件追加 → 删（四项全空时现在返回空串，不再造一个只有 GitHub 的页脚）
+- CSS 里的 `.gh-side` / `.gh-side-tag` / `.gh-pill` / `.gh-text` / `.pr-repo` → 删
+
+只剩一个函数 `github_corner_link($variant)`，两种形态：
+
+| variant | 用在哪 | 定位 |
+|---|---|---|
+| `fixed` | 独立页面（登录、忘记密码、注册关闭、支付回跳） | `position: fixed` 视口右上 |
+| `inline` | 有布局的页面（顶栏右侧、落地页、开发文档） | 参与文档流 |
+
+**落地页正文里的「查看源码 / 打开仓库」两处 CTA 保留**——那是介绍页的营销按钮，
+不是重复的角落入口。角落入口（`class="gh-corner"`）每页恰好一个。
+
+「不可隐藏」这条原则不变：`KB_REPO_URL` 仍是写死常量，不读 settings、不做权限判断、
+后台没有开关。改代码才能拿掉，改了就违反 MIT 的署名要求。
+
+### 20.7 文件丢失的回落（这次顺手修的）
+
+`settings` 里记着文件名、磁盘上却没这个文件（换过服务器、清过 storage、换图标时旧文件被删），
+以前会照旧输出链接。结果是每个页面都带一个 404 的 `<link rel="icon">`，
+浏览器标签一片空白，而且没人知道为什么。
+
+现在 `site_brand_src()` 与 `site_brand_src_value()` 都做存在性校验，丢失就返回空串：
+
+- 图标 → 回落 `assets/` 里内置那套
+- 背景图 → 回落内置预设动画
+- 后台保存 `image` 类型时，如果旧文件已丢失且没传新的，会明确报「背景图已丢失，请重新上传或填地址」，
+  而不是静默留一条死链
+
+### 20.8 升级注意
+
+- **会跑一个迁移**（`migrations/2.6.0.php`），但它不建表、不改表结构，只做两件事：
+  删掉三个废弃文件、清掉 `settings` 里可能残留的 `login_style` / `login_bg` 两项。
+  之所以要写成迁移而不是放进升级器的删除清单，见下面第 20.9 节——这是个真踩过的坑。
+- 老站的背景配置读不到，`auth_bg_get()` 会回落 `preset` + `digits` + 压暗 0，
+  与 2.5.0 的观感完全一致——升级后不会突然变样，想换再去后台点。
+- `assets/login-bg.js` 与 `app/views/login.php`、`register.php` 已从源码树删除。
+  如果你二次开发时 `require` 过它们，升级会报文件不存在，改用 `auth_bg_html()`。
+- **升级完成后这三个文件不会留在服务器上**，直链访问是 404。
+  清理由迁移完成，不依赖升级器的版本。
+
+### 20.9 为什么清理要写成迁移，而不是升级器里的删除清单
+
+2.6.0 一开始把「删除废弃文件」做在 `app/upgrade.php` 里：更新包带一个 `delete.txt`，
+升级器逐行 `unlink`。逻辑本身没问题，路径校验和受保护目录（`config.php` /
+`storage/` / `data/`）拦截都对，恶意包里写 `../config.php` 也删不到东西（有测试覆盖）。
+
+**但实测三个文件一个都没删掉。**
+
+原因是升级时执行的是**站点上原有的那份 `app/upgrade.php`**：
+
+1. 请求进来，PHP 加载站点当前的 `app/upgrade.php`（2.5.0 版，里面没有 `delete.txt` 逻辑）；
+2. `upgrade_apply()` 把包里的新 `app/upgrade.php` 覆盖到磁盘；
+3. 但当前进程用的还是第 1 步加载的那份，覆盖磁盘不影响已加载的代码；
+4. 升级跑完，新升级器要等**下一个请求**才生效。
+
+于是「第一次引入某个删除能力的版本」永远跑不到自己的删除代码——它跑的是上一个版本的升级器。
+这类改动天然延后一个版本才生效，很容易被误判成「代码写错了」。
+
+**迁移文件不受这个限制**：升级器把包里的 `migrations/*.php` 解压到 `storage/tmp/` 再 `require`，
+执行的一定是包里带的新代码，与站点上的升级器有多旧无关。所以 2.6.0 的清理放进迁移里。
+
+两条路径现在都在：
+
+- 迁移 `2.6.0.php`：写死三个相对路径，负责这一次的实际清理；
+- 升级器 `delete.txt`：通用机制，`build_update.php --delete=` 生成，2.6.0 往后的升级可以继续用。
+
+自己二次开发要删旧文件时，**优先用删除清单**（不用改代码），但要注意：如果这是你第一次
+给某个站引入删除能力，得靠迁移做一次，从下一个版本起删除清单才生效。

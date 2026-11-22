@@ -39,6 +39,7 @@ require BASE_PATH . '/app/pay/orders.php';
 require BASE_PATH . '/app/pay/ledger.php';
 require BASE_PATH . '/app/site.php';
 require BASE_PATH . '/app/github_link.php';
+require BASE_PATH . '/app/authbg.php';
 require BASE_PATH . '/app/ui.php';
 require BASE_PATH . '/app/nav.php';
 // install.php 在引导之前就要用这些部署文案，所以这里用 require_once 防止重复声明

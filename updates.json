@@ -2,9 +2,9 @@
     "schema": 1,
     "repo": "arch-chen/xc-kb-portal",
     "branch": "main",
-    "generated_at": "2026-11-22T05:04:04+00:00",
-    "current_src": "2.5.0",
-    "latest": "2.5.0",
+    "generated_at": "2026-11-22T09:01:54+00:00",
+    "current_src": "2.6.0",
+    "latest": "2.6.0",
     "releases": [
         {
             "version": "1.1.0",
@@ -311,6 +311,15 @@
             "zip": "update-2.5.0.zip",
             "sha256": "4dcda3e2e488047d0891b546e26ded08468cb4ef1e3fa77bb36445d2606edcaf",
             "size": 458160
+        },
+        {
+            "version": "2.6.0",
+            "min_version": "2.5.0",
+            "released": "2026-11-22",
+            "notes": "登录与注册合一：16:9 单卡同窗切换 + 10 套动态背景 + 后台可视化配置 + 仓库入口收敛。① 登录/注册改为一页一卡（app/views/auth.php）：以前是两个独立页面（r=login / r=register），点「注册」会整页刷新、URL 变、刚填的账号密码全丢。现在合成一张 16:9 的卡片，左边品牌栏、右边表单，顶部两个 tab 就地切换——不换页、不改 URL、不写 history（否则后退键会在两个 tab 之间反复横跳），表单内容互相保留，键盘左右方向键也能切。卡片按 aspect-ratio:16/9 定比例（1440 宽下正好 1080×607.5），另加 min-height:480px 与 max-height:calc(100vh-96px) 双夹，矮屏宁可破比例也不把输入框挤成一条缝；窄屏（≤900px）直接放弃 16:9 改单栏——390 宽套 16:9 只有 219px 高，注册表单根本放不下，这里观感让位于可用性。旧地址 r=login / r=register 依然有效（不破书签与外部链接），直接打开注册链接会停在注册 tab；注册关闭时只渲染登录面板。② 10 套内置动态背景（assets/auth-bg.js，零依赖零外部请求）：数字雨、星域、极光、粒子连线、波纹、矩阵网格、渐变流光、几何漂浮、代码流、光斑呼吸。每套都是 canvas 手绘，遵守五条硬约束：pointer-events:none 绝不拦输入、aria-hidden 对读屏隐藏、prefers-reduced-motion 只铺一帧静态不启动 rAF、标签页隐藏即停、手机降到 15fps 且 DPR 封顶 2。登录与注册各有一层背景、同时存在于 DOM，切 tab 时只让当前那层跑（AuthBg.activate），另一层留一帧静态待命——两套同时跑纯属白烧 CPU。③ 后台「登录外观」页（v2.6.0 新增，位于后台子菜单「邮件」与「系统与升级」之间）：登录、注册两个槽位各自独立配置，五种来源任选——内置预设（10 张静态缩略图，hovers 不出动画，后台同时跑 10 个 rAF 会卡）、上传图片（存 storage/branding/，经 ?r=branding 输出，因为 storage 目录被 nginx deny）、远程 URL（图片或 mp4/webm 视频直链都认）、自定义 HTML/CSS/JS、纯色无背景；另有 0-90% 压暗滑块（背景之上、卡片之下铺一层遮罩，保证卡片永远清晰）与「恢复默认」。④ 自定义代码的安全边界（这条不是可选项）：管理员粘贴的任意 HTML/JS 若直接内联进页面，它就能读到同源 cookie 与 localStorage，等于会话被接管。所以一律塞进 sandbox 的 iframe——只给 allow-scripts，绝不给 allow-same-origin（两个都给等于没沙箱，同源 iframe 里能直接 parent.document 操作顶层页面），内容走 srcdoc 而不是落地成 .html 文件（落地后被直链访问就是同源 XSS）。外壳背景透明、无边框、铺满由程序写死，管理员只写动画本身。⑤ GitHub 入口收敛到右上角唯一一处：按需求「每个页面只需要在右上角预留一个即可」，删掉 2.5.0 的侧栏入口（.gh-side）、页脚入口、胶囊/文字两种变体，只留 github_corner_link()：独立页面用 fixed 固定视口右上，有布局的页面用 inline 跟随顶栏。原来页脚会强行渲染一个只有 GitHub 的 footer，现在四项备案/版权信息全空就返回空串，不再为放一个入口而造一个页脚。落地页正文里的「查看源码 / 打开仓库」两处 CTA 保留——那是介绍页的营销按钮，不是重复的角落入口。⑥ 顺手修掉四个实测发现的问题：一是外链视频判定的正则用 # 当定界符、模式里又要匹配 URL 的 #hash，PHP 报 Unknown modifier 且永远匹配失败，导致 .mp4 被当 <img> 输出、视频背景整片不出来（改成 ~ 定界符）；二是切 tab 时只改了内存里的 active 变量、没把 data-active 属性写回去，结果登录层一直挂着 data-active=1、注册层是 0，CSS 与后续 resize 重建都读不到正确状态（setActive 现在同步属性，并在首次亮起时重新 measure——该层之前 hidden 时 clientWidth 是 0）；三是注册表单在 1440×900 下高 691px 却要塞进 608px 的卡片，`注册并进入` 连同下面的说明和链接被卡片边缘裁掉（根因是 grid item 默认 min-height:auto 把行撑高了，补上 grid-template-rows:minmax(0,1fr) 与三处 min-height:0，再把主按钮移出滚动区钉在底部，任何人都不用滚才找得到提交按钮）；四是 settings 里记着图标/背景文件名、磁盘上却没这文件时仍然输出链接，每个页面带一个 404 的 <link rel=icon>，浏览器标签一片空白还没人知道为什么（现在做存在性校验，丢失就回落内置图标 / 内置预设动画）。地址与 API 全部不变；发版仍直推 GitHub、后台点在线更新，手动上传 zip 的离线入口保留⑦ 老站升级后旧文件不会留在服务器上。覆盖式升级只写不删，2.5.0 的 app/views/login.php、app/views/register.php、assets/login-bg.js 升级后仍会留着，直链还能打开一个孤立的旧登录页（它的背景脚本已不在维护范围内）。这里有个坑值得记下来：清理逻辑最初写在升级器里读 delete.txt，实测完全不生效——升级时执行的是「站点上原有的那份 app/upgrade.php」，2.5.0 的升级器根本没有这段代码，包里带的新代码要等这次请求结束后才生效，所以第一次引入删除能力的版本永远跑不到自己的删除代码。改为由 migrations/2.6.0.php 完成清理：迁移文件会被升级器从包里解压到 storage/tmp 再 require，跑的一定是包里的新代码，跟站点上的升级器多旧无关。删除清单仍保留在升级器里，从 2.6.0 往后的升级可以继续用它；两条路径都做了同样的路径校验与受保护目录（config.php / storage/ / data/）拦截，恶意包里写 ../config.php 或 storage/kb.sqlite 也删不到东西。",
+            "zip": "update-2.6.0.zip",
+            "sha256": "90e88a160102039e269980eab893f6736afc31f040aab570fc25a4c09c0d1cb1",
+            "size": 494215
         }
     ]
 }

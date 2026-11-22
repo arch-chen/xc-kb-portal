@@ -121,8 +121,39 @@ if (is_dir($migDir)) {
     }
 }
 
+/*
+ * 删除清单（delete.txt）
+ *
+ * 覆盖式升级只会写/覆盖，不会删。废弃的视图或脚本会一直留在服务器上——
+ * 2.6.0 就碰到这个：login.php / register.php / login-bg.js 被 auth.php / auth-bg.js
+ * 取代，但老站升级后这些文件还在，直链还能打开一个孤立的旧登录页。
+ *
+ * 用法：--delete=app/views/login.php,app/views/register.php,assets/login-bg.js
+ * 服务端在 app/upgrade.php 里逐条 unlink，路径校验与受保护目录（config.php /
+ * storage/ / data/）判断跟写入完全一致，清单里写 ../ 也删不到东西。
+ */
+$delRaw = trim((string)($opts['delete'] ?? ''));
+$delList = [];
+if ($delRaw !== '') {
+    foreach (preg_split('/[,\r\n]+/', $delRaw) ?: [] as $d) {
+        $d = trim(str_replace('\\', '/', $d));
+        if ($d !== '' && !str_starts_with($d, '#') && !str_starts_with($d, '/') && !str_contains($d, '..')) {
+            $delList[] = $d;
+        }
+    }
+}
+if ($delList) {
+    $txt = "# 升级时删除的站点相对路径（每行一个）。由 tools/build_update.php --delete= 生成。\n"
+        . "# 服务端会做路径校验并跳过 config.php / storage/ / data/。\n"
+        . implode("\n", $delList) . "\n";
+    $zip->addFromString('delete.txt', $txt);
+}
+
 $zip->close();
 
 printf("已生成 %s\n  版本 %s（要求 ≥%s，从 %s 升上来）\n  打包 %d 个文件\n  大小 %.1f KB\n",
     $out, $version, $min, $from, $count, filesize($out) / 1024);
+if ($delList) {
+    printf("  删除清单 %d 项：%s\n", count($delList), implode(', ', $delList));
+}
 echo "后台 → 系统与升级 → 上传这个 zip 即可。\n";

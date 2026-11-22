@@ -86,6 +86,7 @@ $ep = function (string $method, string $path, string $desc, string $anchor, arra
     <button type="button" class="docs-menu-btn" id="docsMenuBtn">目录</button>
     <div class="docs-top-acts">
       <span class="ver">v<?= e($ver) ?></span>
+      <?= github_corner_link('inline') ?>
       <button type="button" class="link-btn" id="themeBtn"><span id="themeIco">◐</span> <span id="themeLabel">跟随系统</span></button>
       <?php if ($u): ?>
         <a class="btn sm" href="<?= e(u('keys')) ?>">我的 API Key</a>
