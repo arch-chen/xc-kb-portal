@@ -203,10 +203,17 @@ $ep = function (string $method, string $path, string $desc, string $anchor, arra
     <!-- ============ 鉴权 ============ -->
     <section id="auth">
       <h2>鉴权与权限</h2>
-      <p>所有 <code>/v1/*</code> 接口（除 <code>/v1/health</code>）都要求带 Key，两种写法等价：</p>
-      <?php $cb("Authorization: Bearer kb_你的Key\nX-Api-Key: kb_你的Key"); ?>
+      <p>所有 <code>/v1/*</code> 接口（除 <code>/v1/health</code>）都要求带 Key，<b>三种写法等价</b>，
+      服务端按「请求头优先、查询参数兜底」的顺序取值：</p>
+      <?php $cb("Authorization: Bearer kb_你的Key\nX-Api-Key: kb_你的Key\n\n# 查询参数（URL 里带 Key，仅用于不支持自定义 Header 的客户端）\nGET /mcp.php?key=kb_你的Key"); ?>
       <p>Key 的有效权限 = <b>Key 自身勾选的读写</b> ∩ <b>所属用户在该分组的权限</b>。
       用户被移出分组、或 Key 被吊销/过期，接口立刻失效（401/403），不需要重启服务。</p>
+
+      <div class="warn">
+        <b><code>?key=</code> 是兜底方案，不是首选。</b>Key 出现在 URL 里会被记进服务器 access log、
+        反向代理日志、浏览器历史和外层平台的调用记录里。只有客户端<b>完全不支持自定义请求头</b>时（典型是
+        ChatGPT 连接器）才用它，并且给这类用途单独建一把只读 Key，丢了就吊销，不要拿全能 Key 去连。
+      </div>
 
       <div class="table-wrap">
         <table class="table">
@@ -542,15 +549,50 @@ $ep = function (string $method, string $path, string $desc, string $anchor, arra
           . '"params":{"name":"kb_search","arguments":{"query":"库存清零","limit":3}}}\''); ?>
 
       <h4>ChatGPT 说明</h4>
-      <p>ChatGPT 的「连接器」不同版本对自定义 MCP 的鉴权支持不一样：多数版本只接受 OAuth 或不带鉴权，
-      <b>静态 Bearer 要看账号套餐</b>。两条可行路径：</p>
-      <ul>
-        <li>能填自定义 Header 的客户端：直接按上面的 JSON 配。</li>
-        <li>只有 Actions 的（自定义 GPT）：导入 <code><?= e($oas) ?></code>，认证选 API Key → Bearer，粘 Key。</li>
-      </ul>
-      <p class="tiny muted">服务端对未带凭证的请求返回 <code>401</code> + <code>WWW-Authenticate: Bearer</code>，
-      支持标准 Bearer 的客户端会提示补 Key。<b>本站不提供 OAuth 授权服务器</b>，
-      所以只认静态 Token：如果客户端只给「OAuth / 无鉴权」两个选项，就走 OpenAPI + Actions 那条路。</p>
+      <p>ChatGPT 的「连接器」对自定义 MCP 的鉴权<b>只认它自己走 OAuth 换来的 Token，不认手工粘贴的静态 Key</b>。
+      本站不提供 OAuth 授权服务器，所以在 ChatGPT 里选「OAuth / 身份验证」一定会报
+      <code>无法发现 OAuth 设置</code>（<code>/.well-known/oauth-authorization-server</code> 返回 404）。</p>
+
+      <div class="warn">
+        <b>ChatGPT 的正确配法（唯一可行）：</b>
+        <ol>
+          <li>添加连接器时选 <b>「添加自定义 MCP 服务器」</b>。不要选「创建插件」或「上传插件压缩包」——
+              那两项是给无服务器的静态小工具用的，本项目是 PHP + SQLite 的活服务，不是插件。</li>
+          <li>地址填<b>带 Key 的完整地址</b>：<code><?= e($mcp) ?>?key=你的Key</code></li>
+          <li>身份验证选 <b>「无需身份验证」</b>。Key 已在 URL 里，服务端会从查询参数取到。</li>
+        </ol>
+      </div>
+
+      <p>三种失败情形，按发生率排序，遇到先对照这里：</p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th style="width:190px">ChatGPT 报的错</th><th>真实原因</th><th style="width:240px">怎么改</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>无法连接到 MCP 服务器</td>
+              <td>域名拼错。这是最常见的——多打或少打一个字母，DNS 直接查不到。</td>
+              <td>把 URL 复制到浏览器，能弹出 <code>405</code> 或 JSON 报错才算域名对（本站只收 POST，GET 一律 405）。</td>
+            </tr>
+            <tr>
+              <td>401 / 鉴权失败</td>
+              <td>Key 拼错，或<b>多带了一个前缀</b>。正确格式是 <code>kb_&lt;12位&gt;_&lt;40位&gt;</code>，
+                  共 56 字符，<code>kb_</code> 只出现一次；<code>kb_kb_…</code> 必然 401。</td>
+              <td>用后台列表里的「复制 MCP 地址」，不要手工拼。</td>
+            </tr>
+            <tr>
+              <td>无法发现 OAuth 设置</td>
+              <td>身份验证选成了 OAuth。本站没有授权服务器。</td>
+              <td>改成「无需身份验证」，Key 放到 URL 的 <code>?key=</code>。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>能自定义 Header 的客户端（Claude Desktop、Cursor、Cherry Studio）别用 URL 带 Key，按上面的
+      <code>mcpServers</code> 配，Key 走 <code>Authorization</code> 头，不进日志。
+      只有 Actions 的（自定义 GPT）则导入 <code><?= e($oas) ?></code>，认证选 API Key → Bearer。</p>
+      <p class="tiny muted">服务端对未带凭证的请求返回 <code>401</code> + <code>WWW-Authenticate: Bearer realm="kb-portal"</code>，
+      <code>notifications/*</code> 等无 <code>id</code> 的通知返回 <code>202</code> 且无响应体。</p>
 
       <h4>MCP 状态码</h4>
       <div class="table-wrap">
@@ -747,9 +789,12 @@ while True:
 
       <h3>MCP 连不上</h3>
       <ul>
-        <li>405：客户端用 GET 想开 SSE 流。本服务只接受 POST，换「Streamable HTTP / 无状态」模式。</li>
+        <li>405：客户端用 GET 想开 SSE 流。本服务只接受 POST，换「Streamable HTTP / 无状态」模式。
+            反过来说，<b>用 GET 打开 MCP 地址若返回 405，说明域名和路径都是对的</b>，可用来验域名。</li>
         <li>-32004：管理员在后台关了 MCP 接入。</li>
-        <li>返回 <code>401</code> 且带 <code>WWW-Authenticate</code>：Key 没带上或无效。</li>
+        <li>返回 <code>401</code> 且带 <code>WWW-Authenticate</code>：Key 没带上或无效。先看 Key 是不是
+            <code>kb_kb_</code> 双前缀，再确认 URL 里的 <code>?key=</code> 没被客户端截断。</li>
+        <li>ChatGPT 报「无法发现 OAuth 设置」：身份验证选错。必须选「无需身份验证」，Key 放 URL。</li>
       </ul>
 
       <h3>服务端脚本拉不到数据</h3>

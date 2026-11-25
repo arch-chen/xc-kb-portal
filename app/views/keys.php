@@ -12,12 +12,19 @@ $tipBase = '<p><b>两者不能混用。</b>客户端（<code>agent_client.py</co
     . '<p class="muted">地址按当前访问的域名自动生成。若你是通过内网 IP 打开后台，复制到的也是内网地址；'
     . '要让外部 Agent 能连，请在 <code>config.php</code> 的 <code>app.url</code> 里固定域名。</p>';
 
-$tipMcp = '<p><b>ChatGPT 连接器 / 插件：</b>添加自定义连接器 → 地址填 MCP 地址 → 鉴权选 Bearer，'
-    . '粘一个 <code>kb_</code> 开头的 Key。若只有「OAuth / 无鉴权」两个选项，'
-    . '说明当前套餐或客户端版本还没开放 Token 方式，改用下面的 Actions 方案。</p>'
+$tipMcp = '<p><b>ChatGPT 连接器 → 添加自定义 MCP 服务器</b>（不是「创建插件」那两项，那两项给无服务器的静态小工具用）：</p>'
+    . '<ol>'
+    . '<li>地址填下方<b>「带 Key 的地址」</b>（<code>?key=</code> 那一行），不要填光秃秃的 <code>/mcp.php</code>；</li>'
+    . '<li>身份验证选<b>「无需身份验证」</b>——Key 已经在 URL 里了，再选 OAuth 会因为本站没有授权服务器而报「无法发现 OAuth 设置」。</li>'
+    . '</ol>'
+    . '<p class="muted">ChatGPT 的「Bearer / API Key」选项只接受它自己走 OAuth 换来的 Token，不认手工粘贴的静态 Key，'
+    . '所以对 ChatGPT 只能走 URL 带 Key 这条路。代价是 Key 会出现在访问日志和浏览器历史里，'
+    . '给第三方用就单独建一把只读 Key，别拿全能 Key 去连。</p>'
+    . '<p><b>Claude / Cursor / Cherry Studio：</b>这些支持自定义 Header，用干净的 MCP 地址 + '
+    . '<code>Authorization: Bearer</code>，见下方可折叠片段，Key 不进 URL 更安全。</p>'
+    . '<p><b>Dify / n8n / 自写 Agent：</b>走 REST，不需要 MCP。</p>'
     . '<p><b>自定义 GPT（Actions）：</b>Action → Import from URL 填 OpenAPI 地址 → '
     . '认证选 API Key → Auth Type 选 Bearer → 粘 Key。官方已宣布自定义 GPT 逐步退役，这条只适合过渡用。</p>'
-    . '<p><b>Claude / Cursor：</b>见下方可折叠的配置片段，粘进 <code>mcp.json</code> 即可。</p>'
     . '<p class="muted"><b>注意权限边界。</b>一个 Key 只能读写它绑定的那个分组；只勾了「读取」的 Key，'
     . '连上去也写不进去。给第三方 AI 用之前想清楚：这个分组的内容会随对话一起发给对方。</p>';
 
@@ -75,10 +82,18 @@ $tipKey = '<p>Key 只显示一次明文，之后库里留加密副本，可随�
   <?= panel_title('接进 ChatGPT', $tipMcp, 'MCP') ?>
 
   <div class="ep-row">
-    <div class="ep-label">MCP 服务器地址<span class="ep-sub">聊天客户端、Claude、Cursor 填这一行</span></div>
+    <div class="ep-label">MCP 服务器地址<span class="ep-sub">Claude、Cursor、Cherry Studio 等支持自定义 Header 的客户端</span></div>
     <div class="ep-box">
       <code id="epMcp"><?= e($mcpUrl) ?></code>
       <button type="button" class="btn sm" data-copy="<?= e($mcpUrl) ?>">复制</button>
+    </div>
+  </div>
+
+  <div class="ep-row">
+    <div class="ep-label">带 Key 的地址<span class="ep-sub">ChatGPT 连接器填这一行，Key 直接拼在 URL 里</span></div>
+    <div class="ep-box">
+      <code id="epMcpKey"><?= e($mcpUrl) ?>?key=kb_你的Key</code>
+      <span class="ep-check muted">下方每个 Key 都有「复制 MCP 地址」按钮</span>
     </div>
   </div>
 
@@ -88,6 +103,11 @@ $tipKey = '<p>Key 只显示一次明文，之后库里留加密副本，可随�
       <code id="epOpenapi"><?= e($openApiUrl) ?></code>
       <button type="button" class="btn sm" data-copy="<?= e($openApiUrl) ?>">复制</button>
     </div>
+  </div>
+
+  <div class="ep-warn">
+    <b>ChatGPT 里身份验证必须选「无需身份验证」。</b>Key 已经写在 URL 的 <code>?key=</code> 里，
+    再选 OAuth 会因为本站没有授权服务器而报「无法发现 OAuth 设置」。
   </div>
 
   <div class="ep-check-row">
@@ -195,13 +215,16 @@ print(kb.search("库存清零", limit=3))</code></pre>
                 <span class="tiny muted" title="旧版本只存了哈希，明文无法还原">旧 Key，重建后才能查看</span>
               <?php else: ?>
                 <div class="key-cell" data-key-id="<?= (int)$r['id'] ?>" data-mask="<?= e($r['key_mask']) ?>"
-                     data-base="<?= e($base) ?>">
+                     data-base="<?= e($base) ?>" data-mcp="<?= e($mcpUrl) ?>">
                   <code class="key-text"><?= e($r['key_mask']) ?></code>
                   <?php if ((int)$r['revoked'] === 0): ?>
                     <button type="button" class="link" data-key-act="reveal"
                             data-url="<?= e(u('key_reveal', ['id' => (int)$r['id']])) ?>">显示</button>
                     <button type="button" class="link" data-key-act="copy"
                             data-url="<?= e(u('key_reveal', ['id' => (int)$r['id']])) ?>">复制</button>
+                    <button type="button" class="link" data-key-act="copymcp"
+                            data-url="<?= e(u('key_reveal', ['id' => (int)$r['id']])) ?>"
+                            title="复制带 Key 的 MCP 地址，ChatGPT 连接器直接粘这一行">复制 MCP 地址</button>
                     <button type="button" class="link" data-key-act="copyenv"
                             data-url="<?= e(u('key_reveal', ['id' => (int)$r['id']])) ?>"
                             title="复制 KB_URL 与 KB_KEY 两行，直接贴进 Agent 配置">复制接入配置</button>

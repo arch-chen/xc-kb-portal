@@ -2,9 +2,9 @@
     "schema": 1,
     "repo": "arch-chen/xc-kb-portal",
     "branch": "main",
-    "generated_at": "2026-11-22T09:35:35+00:00",
-    "current_src": "2.6.1",
-    "latest": "2.6.1",
+    "generated_at": "2026-11-25T16:03:52+00:00",
+    "current_src": "2.6.2",
+    "latest": "2.6.2",
     "releases": [
         {
             "version": "1.1.0",
@@ -329,6 +329,15 @@
             "zip": "update-2.6.1.zip",
             "sha256": "7fbd7440033e552385d20e02353e1f20be8fe9f7390ccfdfeeb1a0f4e5be7782",
             "size": 491290
+        },
+        {
+            "version": "2.6.2",
+            "min_version": "2.6.1",
+            "released": "2026-11-25",
+            "notes": "修的是「指引写错」，不是接口坏掉：本站的 MCP 鉴权一直支持三种取值（Authorization: Bearer、X-Api-Key、以及 URL 里的 ?key=），但后台提示和开发文档只教了前两种，还额外劝用户「鉴权选 Bearer」。实际接 ChatGPT 时，它的连接器只认自己走 OAuth 换来的 Token，不认手工粘贴的静态 Key，而本站又不提供 OAuth 授权服务器，于是照文档操作必然卡在「无法发现 OAuth 设置」。现在后台「接进 ChatGPT」面板直接给出「带 Key 的地址」一行（mcp.php?key=…），每把 Key 新增「复制 MCP 地址」按钮，一键拿到 ChatGPT 能直接用的完整地址；并在面板里用醒目提示写明：身份验证必须选「无需身份验证」、添加时选「添加自定义 MCP 服务器」而不是「创建插件」。开发文档的鉴权章节补上 ?key= 这个取值方式，并说明它是兜底方案、会进 access log，只给不支持自定义请求头的客户端用；MCP 章节重写了 ChatGPT 部分，把三种最常见的失败（域名拼错、Key 多一个 kb_ 前缀、身份验证选成 OAuth）列成对照表，每种都给出可自测的判断方法和改法。另外文档里明确写了「用 GET 打开 MCP 地址返回 405 就说明域名和路径都对」，这是排查域名拼错最快的手段。本次只改视图、样式、前端脚本与测试，不动数据库、不改 API 行为、无需迁移；从 2.6.1 升上来是替换 4 个文件（app/views/keys.php、app/views/docs.php、assets/app.js、assets/app.css）。",
+            "zip": "update-2.6.2.zip",
+            "sha256": "8a56180522a9c36662c7aa09c35695dcaacb4b06ca04cd81507a93907f023f57",
+            "size": 491782
         }
     ]
 }

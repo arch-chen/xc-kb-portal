@@ -153,6 +153,17 @@
       return;
     }
 
+    // 复制「带 Key 的 MCP 地址」：ChatGPT 连接器只认这种形式
+    if (act === 'copymcp') {
+      var mcp = cell.getAttribute('data-mcp') || '';
+      fetchKey(url).then(function (k) {
+        return copyText(mcp + '?key=' + k);
+      }).then(function () {
+        flashLabel(btn, '已复制');
+      }).catch(function (e) { alert(e.message); });
+      return;
+    }
+
     // 复制「接入配置」：两行环境变量，直接贴进 Agent
     if (act === 'copyenv') {
       var base = cell.getAttribute('data-base') || '';
