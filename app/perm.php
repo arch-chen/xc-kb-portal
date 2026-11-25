@@ -88,6 +88,33 @@ function group_perm(int $userId, int $groupId): array
     if ($userId > 0 && group_owner_id($groupId) === $userId) {
         return ['read' => true, 'write' => true];
     }
+    /**
+     * 共享分组（owner_id=0）对管理员默认读写（2.6.4 补）。
+     *
+     * 2.3.0 把管理员的身份拆成前台/后台两套：前台按普通用户判权。这对私有分组
+     * 是对的（别人的私有空间不该被管理员在前台翻），但共享分组没有归属人，
+     * 2.3.0 用一条迁移把「当时存在的」共享分组补给当时的管理员一份成员关系。
+     *
+     * 问题就在「当时」两个字上：
+     *   - 迁移之后新建的管理员账号，一条成员关系都没有 → 前台看不到任何共享分组，
+     *     连页面都进不去（403），更别说改名字；
+     *   - 迁移之后由导入 / 安装脚本创建的共享分组，也不会自动补成员。
+     * 结果就是「管理员明明有权限，却什么共享库都看不到」，用户报的「分组名称不能改」
+     * 就是这么来的。
+     *
+     * 判定用「$userId 这个人是不是管理员」，不是 current_user()——
+     * 这个函数经常被拿来查别人的权限（后台列表、测试、AI 工具），
+     * 用当前登录人判断会给错答案。
+     *
+     * 读写都给，和 2.3.0 那条迁移补进去的成员关系保持一致（它给的是
+     * can_read=1 且 can_write=1）。这里只是把「迁移补过的那几个管理员」
+     * 扩成「所有管理员」，不改变权限语义，避免同一个管理员在
+     * 「老的共享库能写、新加的共享库不能写」之间来回摇摆。
+     * 私有分组完全不受影响——上面那两行早在本判断之前就返回了。
+     */
+    if ($userId > 0 && group_owner_id($groupId) === 0 && is_admin_user($userId)) {
+        return ['read' => true, 'write' => true];
+    }
     $p = user_perms($userId)[$groupId] ?? null;
     return $p ?: ['read' => false, 'write' => false];
 }
@@ -105,11 +132,26 @@ function can_write_group(int $userId, int $groupId): bool
 /**
  * 「我的分组」：永远按前台口径（自己建的 + 被授权的），不受后台上下文影响。
  * 左侧栏专用——管理员在后台页面时侧栏也不该突然列出全站分组。
+ *
+ * 2.6.4：管理员额外带上共享分组。这个 SQL 不走 group_perm()，
+ * 所以光改 group_perm() 是不够的——权限放开了、侧栏还是列不出来。
+ * 两个地方必须一起改，否则会出现「点得进去但侧栏看不见」这种更奇怪的状态。
  */
 function my_groups(int $userId): array
 {
     if ($userId <= 0) {
         return [];
+    }
+    if (is_admin_user($userId)) {
+        return all(
+            'SELECT g.* FROM ' . tbl('groups') . ' g
+             WHERE g.owner_id = ?
+                OR COALESCE(g.owner_id, 0) = 0
+                OR EXISTS (SELECT 1 FROM ' . tbl('group_user') . ' gu
+                            WHERE gu.group_id = g.id AND gu.user_id = ? AND gu.can_read = 1)
+             ORDER BY g.sort, g.id',
+            [$userId, $userId]
+        );
     }
     return all(
         'SELECT g.* FROM ' . tbl('groups') . ' g
@@ -119,6 +161,33 @@ function my_groups(int $userId): array
          ORDER BY g.sort, g.id',
         [$userId, $userId]
     );
+}
+
+/**
+ * 按用户 id 判管理员（不依赖当前会话）。
+ *
+ * group_perm() / my_groups() 会被拿来查「任意用户」的权限——后台用户列表、
+ * 权限矩阵、AI 工具、以及测试。以前这些地方只能用 current_user()，
+ * 一旦被查的人不是当前登录人就会给出错答案。
+ * 结果按 id 缓存在 $GLOBALS 里，一个请求内同一个人的角色只查一次库。
+ */
+function is_admin_user(int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+    if (!isset($GLOBALS['__is_admin_user'])) {
+        $GLOBALS['__is_admin_user'] = [];
+    }
+    if (array_key_exists($userId, $GLOBALS['__is_admin_user'])) {
+        return (bool)$GLOBALS['__is_admin_user'][$userId];
+    }
+    $role = (string)val(
+        'SELECT role FROM ' . tbl('users') . ' WHERE id = ? AND status = 1',
+        [$userId],
+        ''
+    );
+    return (bool)($GLOBALS['__is_admin_user'][$userId] = ($role === 'admin'));
 }
 
 /**

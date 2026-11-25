@@ -1,4 +1,4 @@
-<?php /** @var array $group @var array $rows @var array $pg @var string $kind @var bool $canWrite @var bool $canManage @var string $ownerNick @var string $baseName */ ?>
+<?php /** @var array $group @var array $rows @var array $pg @var string $kind @var bool $canWrite @var bool $canManage @var string $ownerNick @var string $baseName @var bool $isAdmin */ ?>
 <section class="page-head">
   <div>
     <h1 class="page-title"><?= e($group['name']) ?></h1>
@@ -83,7 +83,8 @@
         私有分组的完整名称是「昵称 · 你填的名字」，前面的昵称会跟着账户昵称自动更新。
         <?php if ($isDefault): ?>留空则保持默认空间「<?= e($ownerNick) ?> 的空间」。<?php endif; ?>
       <?php else: ?>
-        共享分组，改名只影响显示名称。
+        这是共享分组（全站共用），改名只影响显示名称，不影响里面的内容与已发出的 API Key。
+        也可以到「管理后台 → 分组管理」里批量改，还能顺带调排序与说明。
       <?php endif; ?>
     </div>
     <div class="form-actions">

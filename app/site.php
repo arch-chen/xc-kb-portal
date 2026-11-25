@@ -269,7 +269,58 @@ function site_save(array $post, array $files = []): array
         setting_set($k, $in[$k]);
     }
     setting_set('site_name', $in['site_name']);
+
+    /**
+     * 写回读校验（2.6.4）
+     *
+     * 起因：线上出现「提示已保存、刷新后值回退」。settings 表写入失败时 PDO 本应抛异常，
+     * 但症状是写没落盘却谎报成功，所以这里写完立刻查一遍。
+     *
+     * 两个刻意的设计，都是踩过的坑：
+     *   1. 直接查 settings 原始行，不经过 site_load()。
+     *      site_load() 会给空值填默认值（site_icp_url 默认备案链接、site_name 默认
+     *      config.php 里的 app.name），用它做校验等于拿「默认值」跟「想写空」比，
+     *      永远判不出来。而且它只反映「读得到什么」，不反映「库里存的是什么」。
+     *   2. 空值也要校验。清空一个字段本身就是一次真实的写入，把它跳过等于放过
+     *      「清空没生效」这类故障。
+     *
+     * 只核对文本项：图片走的是 storage/branding 文件 + settings 文件名两条路径，
+     * 文件写不进去 site_brand_upload() 会直接返回错误，不靠这里兜。
+     */
+    $bad = [];
+    $badDetail = [];
+    try {
+        foreach ($limits as $setKey => $_) {
+            $want = (string)$in[$setKey];
+            $got = setting_get($setKey, null);
+            // 库里存的是 NULL 和空串，对「想写空」来说都是成功
+            $gotNorm = $got === null ? '' : (string)$got;
+            if ($gotNorm !== $want) {
+                $bad[] = str_replace('site_', '', $setKey);
+                $badDetail[] = $setKey . ' 写入「' . $want . '」，读回「' . $gotNorm . '」';
+            }
+        }
+    } catch (Throwable $e) {
+        return [
+            'ok' => false, 'message' => '',
+            'error' => '保存后校验读回失败：' . $e->getMessage()
+                . '。数据库可能已损坏或不可读，请检查 storage/ 权限。',
+        ];
+    }
+    // 同一请求内再渲染时要看到新值
     site_reset();
+
+    if ($bad) {
+        return [
+            'ok' => false,
+            'message' => '',
+            'error' => '保存没能落盘：' . implode('、', $bad) . ' 写入后读回来的值不对（'
+                . implode('；', array_slice($badDetail, 0, 3)) . '）。'
+                . (db_driver() === 'sqlite'
+                    ? '多半是数据库文件或所在目录不可写，或磁盘已满。'
+                    : '多半是 MySQL 账号对该表没有写权限，或字段长度不够。'),
+        ];
+    }
 
     $msg = '站点信息已保存';
     if ($notes) {

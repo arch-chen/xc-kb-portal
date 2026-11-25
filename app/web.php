@@ -522,14 +522,25 @@ function ctrl_group(): void
 
     $owner = (int)$g['owner_id'];
     $ownerNick = $owner > 0 ? (group_owner_nick($g) ?: '用户' . $owner) : '';
-    // 前台只认归属人；共享分组（owner_id=0）的改名留给后台「分组管理」
-    $canManage = $owner > 0 && $owner === (int)$u['id'];
+    /**
+     * 谁能改这个分组的名字（2.6.4 修）：
+     *   - 私有分组（owner_id>0）：只有归属人本人，前台只填后半截，前缀昵称自动维护。
+     *   - 共享分组（owner_id=0）：以前这里恒为 false，导致管理员在前台打开共享分组时
+     *     连「分组设置」这张卡片都不渲染，只能绕到后台「分组管理」去改 —— 用户以为不能改名。
+     *     现在放开给管理员。刻意不给「有写权限的成员」：写权限是「能往里加内容」，
+     *     不等于能改整个库的名字，那是结构性变更。
+     */
+    $canManage = $owner > 0
+        ? $owner === (int)$u['id']
+        : is_admin($u);
 
     // 改名 / 改说明：归属人本人（管理员在自己后台里改，不走这里）
     if (is_post()) {
         csrf_check();
         if (!$canManage) {
-            flash('只有这个分组的创建者可以改名', 'err');
+            flash($owner > 0
+                ? '只有这个分组的创建者本人可以改名'
+                : '只有管理员可以改共享分组的名称', 'err');
             redirect(u('g', ['slug' => $g['slug']]));
         }
         $nameIn = nick_clean(post('name'));
@@ -571,6 +582,7 @@ function ctrl_group(): void
         'canWrite' => can_write_group((int)$u['id'], (int)$g['id']),
         'canManage' => $canManage,
         'ownerNick' => $ownerNick,
+        'isAdmin' => is_admin($u),
         'baseName' => $owner > 0 ? group_base_of((string)$g['name'], $ownerNick) : (string)$g['name'],
     ]);
 }
@@ -1177,6 +1189,16 @@ function ctrl_admin_entry_view(): void
 function ctrl_admin_system(): void
 {
     require_admin();
+    /**
+     * 后台系统页不许缓存（2.6.4）。
+     *
+     * 这个页面上有版本号、站点信息的当前值、升级记录——全是「刚改完就要看到新值」
+     * 的东西。以前没发任何 Cache-Control，一旦前面挂了 CDN / 反代 / 或者浏览器
+     * 开了「返回时用缓存」，保存成功后重定向回来看到的还是旧值，
+     * 症状和「保存没落盘」一模一样，白排查半天。表单页一律 no-store。
+     */
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
     $msg = '';
     $err = '';
     if (is_post()) {
