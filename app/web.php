@@ -1349,17 +1349,35 @@ function ctrl_admin_mail(): void
                 flash('「发件人邮箱」格式不对', 'err');
                 redirect(u('admin_mail'));
             }
-            setting_set('mail_method', post('mail_method') === 'mail' ? 'mail' : 'smtp');
+            $method = post('mail_method');
+            if (!in_array($method, ['resend', 'smtp', 'mail'], true)) {
+                $method = 'resend';
+            }
+            setting_set('mail_method', $method);
             setting_set('mail_host', mb_substr(post('mail_host'), 0, 190));
             setting_set('mail_port', (string)($port > 0 ? $port : 465));
             setting_set('mail_secure', $secure);
             setting_set('mail_user', mb_substr(post('mail_user'), 0, 190));
+
             $pass = trim((string)($_POST['mail_pass'] ?? ''));
             if ($pass !== '') {
                 setting_set('mail_pass', secret_encrypt($pass));
             } elseif (post('mail_pass_clear') === '1') {
                 setting_set('mail_pass', '');
             }
+
+            // Resend API Key：与 SMTP 密码分开存，切换通道时不会互相覆盖
+            $apiKey = trim((string)($_POST['mail_api_key'] ?? ''));
+            if ($apiKey !== '') {
+                // 常见误操作：把整行 "Authorization: Bearer re_xxx" 或带引号的内容粘进来
+                $apiKey = preg_replace('/^\s*Authorization\s*:\s*/i', '', $apiKey) ?? $apiKey;
+                $apiKey = preg_replace('/^\s*Bearer\s+/i', '', $apiKey) ?? $apiKey;
+                $apiKey = trim($apiKey, " \t\n\r\0\x0B\"'");
+                setting_set('mail_api_key', secret_encrypt($apiKey));
+            } elseif (post('mail_api_key_clear') === '1') {
+                setting_set('mail_api_key', '');
+            }
+
             setting_set('mail_from', $from);
             setting_set('mail_from_name', mb_substr(post('mail_from_name'), 0, 60));
             setting_set('mail_no_verify', post('mail_no_verify') === '1' ? '1' : '0');
@@ -1368,9 +1386,10 @@ function ctrl_admin_mail(): void
             setting_set('mail_welcome', post('mail_welcome') === '1' ? '1' : '0');
             mail_cfg(true);
             audit('update_mail_settings', 'enabled=' . setting_get('mail_enabled')
-                . ' host=' . setting_get('mail_host'));
+                . ' method=' . setting_get('mail_method') . ' host=' . setting_get('mail_host'));
             flash('邮件设置已保存' . (setting_get('mail_enabled') === '1' && !mail_ready()
-                ? '。注意：开关已打开，但发件人或服务器还没填全，现在还不能发信' : ''));
+                ? '。注意：开关已打开，但发件人或' . ($method === 'resend' ? ' API Key ' : '服务器')
+                    . '还没填全，现在还不能发信' : ''));
             redirect(u('admin_mail'));
         }
 
@@ -1443,6 +1462,7 @@ function ctrl_admin_mail(): void
         'c'         => $c,
         'ready'     => mail_ready(),
         'hasPass'   => $c['pass'] !== '',
+        'hasApiKey' => $c['api_key'] !== '',
         'lastError' => (string)setting_get('mail_last_error', ''),
         'lastErrAt' => (string)setting_get('mail_last_error_at', ''),
         'lastOkAt'  => (string)setting_get('mail_last_ok_at', ''),

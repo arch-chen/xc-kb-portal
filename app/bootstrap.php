@@ -17,6 +17,7 @@ require BASE_PATH . '/app/text.php';
 require BASE_PATH . '/app/entries.php';
 require BASE_PATH . '/app/secret.php';
 require BASE_PATH . '/app/smtp.php';
+require BASE_PATH . '/app/resend.php';
 require BASE_PATH . '/app/mail.php';
 require BASE_PATH . '/app/upsert.php';
 require BASE_PATH . '/app/importer.php';

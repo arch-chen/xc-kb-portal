@@ -25,12 +25,13 @@ function mail_cfg(bool $reset = false): array
     }
     $c = [
         'enabled'  => (string)setting_get('mail_enabled', '0') === '1',
-        'method'   => (string)(setting_get('mail_method', 'smtp') ?: 'smtp'),
+        'method'   => (string)(setting_get('mail_method', 'resend') ?: 'resend'),
         'host'     => trim((string)setting_get('mail_host', '')),
         'port'     => (int)setting_get('mail_port', '465'),
         'secure'   => (string)(setting_get('mail_secure', 'ssl') ?: 'ssl'),
         'user'     => trim((string)setting_get('mail_user', '')),
         'pass'     => secret_decrypt((string)setting_get('mail_pass', '')),
+        'api_key'  => secret_decrypt((string)setting_get('mail_api_key', '')),
         'from'     => trim((string)setting_get('mail_from', '')),
         'from_name' => trim((string)setting_get('mail_from_name', '')),
         'no_verify' => (string)setting_get('mail_no_verify', '0') === '1',
@@ -46,7 +47,14 @@ function mail_enabled(): bool
     return mail_cfg()['enabled'];
 }
 
-/** 真正能发信：开关打开 + 发件人合法 + （SMTP 模式有服务器 / mail 模式） */
+/**
+ * 真正能发信：开关打开 + 发件人合法 + 所选通道的凭证齐备。
+ *
+ * 三种通道的必备项不同：
+ *   resend —— API Key（走 HTTPS，不受主机封端口影响）
+ *   smtp   —— 服务器地址
+ *   mail   —— 什么都不用，交给本机 MTA
+ */
 function mail_ready(): bool
 {
     $c = mail_cfg();
@@ -55,6 +63,9 @@ function mail_ready(): bool
     }
     if ($c['method'] === 'mail') {
         return true;
+    }
+    if ($c['method'] === 'resend') {
+        return $c['api_key'] !== '';
     }
     return $c['host'] !== '';
 }
@@ -100,6 +111,8 @@ function mail_send(string $to, string $subject, string $html, string $text = '',
 
     if ($c['method'] === 'mail') {
         $r = mail_send_php_mail($c, $to, $subject, $html, $text);
+    } elseif ($c['method'] === 'resend') {
+        $r = resend_send($c, $to, $subject, $html, $text);
     } else {
         $r = smtp_send($c, $to, $subject, $html, $text);
     }
@@ -167,89 +180,125 @@ function mail_log_write(string $to, string $subject, string $kind, bool $ok, str
 /* ---------------- 模板 ---------------- */
 
 /**
- * 统一的邮件外观。邮件客户端对 CSS 支持极差，全部用行内样式 + 表格布局。
+ * 统一的邮件外观（紫色头部 + 白色卡片）。邮件客户端对 CSS 支持极差，
+ * 所以全部用行内样式 + 表格/块级布局，不依赖 <style> 标签。
  *
- * @param array<int,string> $paras 正文段落
+ * @param array<int,string> $paras 正文段落（已 HTML 转义）
  * @param array<int,array{0:string,1:string}> $rows 键值行
  */
 function mail_html(string $title, string $intro, array $paras = [], ?string $code = null,
                    array $rows = [], string $footNote = ''): string
 {
     $site = e(app_name());
-    $h = '<div style="margin:0;padding:28px 12px;background:#f4f5f7;'
+    $accent = '#4f46e5';
+
+    $h = '<div style="margin:0;padding:24px;background:#f4f4f5;'
         . 'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,'
-        . '\'PingFang SC\',\'Microsoft YaHei\',sans-serif;color:#1f2430;">';
-    $h .= '<div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e6e8ec;'
-        . 'border-radius:14px;padding:30px 30px 24px;">';
-    $h .= '<div style="font-size:13px;letter-spacing:.08em;color:#8b94a6;text-transform:uppercase;'
-        . 'margin-bottom:16px;font-weight:600;">' . $site . '</div>';
-    $h .= '<h1 style="margin:0 0 12px;font-size:20px;line-height:1.4;font-weight:700;color:#111827;">'
-        . e($title) . '</h1>';
-    $h .= '<p style="margin:0 0 16px;font-size:14.5px;line-height:1.75;color:#374151;">' . e($intro) . '</p>';
+        . '\'PingFang SC\',\'Microsoft YaHei\',sans-serif;color:#18181b;">';
+    $h .= '<div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;'
+        . 'overflow:hidden;box-shadow:0 8px 30px rgba(15,23,42,.10);">';
+
+    // 头部：站点名（小字）+ 标题
+    $h .= '<div style="background:' . $accent . ';color:#ffffff;padding:28px 32px;">'
+        . '<div style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;'
+        . 'opacity:.78;margin-bottom:10px;font-weight:600;">' . $site . '</div>'
+        . '<h1 style="margin:0;font-size:24px;line-height:1.25;font-weight:700;color:#ffffff;">'
+        . e($title) . '</h1></div>';
+
+    // 正文
+    $h .= '<div style="padding:32px;font-size:15px;line-height:1.7;color:#18181b;">';
+    $h .= '<p style="margin:0 0 14px;">' . e($intro) . '</p>';
 
     if ($code !== null) {
-        $h .= '<div style="margin:20px 0;padding:16px;text-align:center;background:#f7f8fa;'
-            . 'border:1px dashed #cfd4de;border-radius:10px;">'
-            . '<div style="font-family:Consolas,Menlo,monospace;font-size:30px;letter-spacing:9px;'
-            . 'font-weight:700;color:#111827;">' . e($code) . '</div>'
-            . '<div style="margin-top:8px;font-size:12px;color:#8b94a6;">'
-            . '有效期 ' . (MAIL_CODE_TTL / 60) . ' 分钟，只能使用一次</div></div>';
+        $h .= '<p style="margin:0 0 8px;">您的验证码是：</p>'
+            . '<p style="margin:0 0 18px;font-size:32px;font-weight:700;letter-spacing:8px;'
+            . 'text-align:center;font-family:Consolas,Menlo,monospace;color:#18181b;">'
+            . e($code) . '</p>'
+            . '<p style="margin:0 0 14px;">验证码将在 <strong>'
+            . (int)(MAIL_CODE_TTL / 60) . '</strong> 分钟后失效。</p>';
     }
 
     foreach ($paras as $p) {
-        $h .= '<p style="margin:0 0 12px;font-size:14px;line-height:1.75;color:#4b5563;">' . $p . '</p>';
+        $h .= '<p style="margin:0 0 14px;">' . $p . '</p>';
     }
 
     if ($rows) {
-        $h .= '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px;">';
+        $h .= '<table style="width:100%;border-collapse:collapse;margin:18px 0;font-size:14px;">';
         foreach ($rows as $r) {
-            $h .= '<tr><td style="padding:7px 0;color:#8b94a6;width:110px;vertical-align:top;">' . e($r[0])
-                . '</td><td style="padding:7px 0;color:#1f2430;">' . e($r[1]) . '</td></tr>';
+            $h .= '<tr>'
+                . '<td style="padding:8px 0;color:#71717a;width:110px;vertical-align:top;border-bottom:1px solid #f4f4f5;">'
+                . e($r[0]) . '</td>'
+                . '<td style="padding:8px 0;color:#18181b;border-bottom:1px solid #f4f4f5;">'
+                . e($r[1]) . '</td></tr>';
         }
         $h .= '</table>';
     }
 
-    $h .= '<div style="margin-top:24px;padding-top:14px;border-top:1px solid #eef0f4;font-size:12px;'
-        . 'line-height:1.7;color:#9aa2b1;">' . ($footNote !== '' ? e($footNote) . '<br>' : '')
-        . '这封邮件由系统自动发出，请勿直接回复。</div>';
+    $h .= '</div>';
+
+    // 页脚
+    $h .= '<div style="padding:18px 32px;background:#fafafa;color:#a1a1aa;font-size:12px;'
+        . 'line-height:1.7;">'
+        . ($footNote !== '' ? e($footNote) . '<br>' : '')
+        . 'This email was sent by ' . $site . '. Please do not reply directly.</div>';
+
     $h .= '</div></div>';
     return $h;
 }
 
-/** 验证码邮件（按用途换措辞） */
-function mail_code_mail(string $purpose, string $code): array
+/**
+ * 验证码邮件（按用途换措辞）。
+ *
+ * $name 是收件人称呼：有用户名就用它，没有就用邮箱前缀，都没有就退成「您好」。
+ * 模板里的 {{recipient_name}} / {{verification_code}} / {{expires_in_minutes}} / {{site_name}}
+ * 四个占位全部由这里填好，不再依赖外部模板引擎。
+ */
+function mail_code_mail(string $purpose, string $code, string $name = '', string $email = ''): array
 {
     $site = app_name();
+
+    // 称呼：用户名 → 邮箱前缀 → 「您好」
+    $who = trim($name);
+    if ($who === '' && $email !== '') {
+        $at = strpos($email, '@');
+        $who = $at !== false ? substr($email, 0, $at) : $email;
+    }
+    if ($who === '') {
+        $who = '您好';
+    }
+
     switch ($purpose) {
         case 'register':
             $subject = $site . ' 注册验证码';
-            $title = '完成注册';
-            $intro = '你正在注册 ' . $site . ' 账号，验证码是：';
-            $paras = ['把上面的验证码填回注册页面即可完成注册。如果不是你本人操作，忽略这封邮件即可，邮箱不会被注册。'];
+            $title = '邮箱验证码';
+            $intro = $who . '，您好：';
+            $paras = ['把上面的验证码填回注册页面即可完成注册。如果不是您本人操作，请忽略此邮件，邮箱不会被注册。'];
             break;
         case 'reset':
             $subject = $site . ' 重置密码验证码';
             $title = '重置密码';
-            $intro = '你正在重置 ' . $site . ' 的登录密码，验证码是：';
-            $paras = ['验证码填回页面后即可设置新密码。如果不是你本人操作，请立即修改密码并检查账号安全。'];
+            $intro = $who . '，您好：';
+            $paras = ['验证码填回页面后即可设置新密码。如果不是您本人操作，请立即修改密码并检查账号安全。'];
             break;
         case 'change':
             $subject = $site . ' 修改密码验证码';
             $title = '修改密码';
-            $intro = '你正在修改 ' . $site . ' 的登录密码，验证码是：';
-            $paras = ['如果这不是你本人的操作，说明有人已经登录了你的账号，请立刻联系管理员。'];
+            $intro = $who . '，您好：';
+            $paras = ['如果这不是您本人的操作，说明有人已经登录了您的账号，请立刻联系管理员。'];
             break;
         default:
             $subject = $site . ' 邮箱验证码';
-            $title = '验证邮箱';
-            $intro = '你正在为 ' . $site . ' 账号绑定这个邮箱，验证码是：';
+            $title = '邮箱验证码';
+            $intro = $who . '，您好：';
             $paras = ['验证成功后，账号通知、找回密码都会用到这个邮箱。'];
             break;
     }
+
     $html = mail_html($title, $intro, $paras, $code);
-    $text = $title . "\n\n" . $intro . "\n\n" . $code . "\n\n"
-        . implode("\n", array_map(static fn($p) => strip_tags($p), $paras))
-        . "\n\n验证码 " . (MAIL_CODE_TTL / 60) . " 分钟内有效。";
+    $text = $title . "\n\n" . $intro . "\n\n您的验证码是：" . $code . "\n\n"
+        . '验证码将在 ' . (int)(MAIL_CODE_TTL / 60) . ' 分钟后失效。'
+        . "\n\n如果不是您本人操作，请忽略此邮件。"
+        . "\n\nThis email was sent by {$site}. Please do not reply directly.";
     return ['subject' => $subject, 'html' => $html, 'text' => $text];
 }
 
@@ -330,7 +379,7 @@ function mail_code_issue(string $email, string $purpose, int $uid = 0): array
         'created_at' => now_str(),
     ]);
 
-    $tpl = mail_code_mail($purpose, $code);
+    $tpl = mail_code_mail($purpose, $code, '', $email);
     $r = mail_send($email, $tpl['subject'], $tpl['html'], $tpl['text'], 'code:' . $purpose, $uid ?: null);
     if (!$r['ok']) {
         // 没发出去就不留码，避免用户拿着一个收不到的码反复试

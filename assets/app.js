@@ -446,3 +446,27 @@
     if (ev.key === 'Escape' || ev.keyCode === 27) closeAll();
   });
 })();
+
+/* 邮件设置：切换发送通道时只显示对应的一组配置。
+   Resend 只要三个字段，SMTP 的参数收进折叠区，避免一进来就被十几个输入框劝退。 */
+(function () {
+  var form = document.querySelector('form [data-mail-pane], form .mail-block, form .mail-adv');
+  if (!form) return;
+
+  function sync() {
+    var picked = document.querySelector('input[name="mail_method"]:checked');
+    var v = picked ? picked.value : 'resend';
+    var resendBox = document.querySelector('[data-mail-pane="resend"]');
+    var smtpBox = document.querySelector('[data-mail-pane="smtp"]');
+    if (resendBox) resendBox.hidden = v !== 'resend';
+    if (smtpBox) {
+      // SMTP 参数始终可展开（有人先填后切），但只在选中 smtp 时自动展开
+      if (v === 'smtp') { smtpBox.setAttribute('open', ''); }
+    }
+  }
+
+  document.addEventListener('change', function (ev) {
+    if (ev.target && ev.target.name === 'mail_method') sync();
+  });
+  sync();
+})();

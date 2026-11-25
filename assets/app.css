@@ -381,6 +381,16 @@ textarea.mono-input { font-family: var(--mono) !important; font-size: 13.5px !im
 .field-group { display: flex; flex-direction: column; gap: 8px; }
 .field-label { font-size: 13px; color: var(--text-2); font-weight: 600; }
 .radios { display: flex; gap: 18px; flex-wrap: wrap; }
+
+/* 邮件设置：Resend 与 SMTP 两组配置互斥显示。
+   用 hidden 属性而不是 display:none 类，避免与 .form 的 flex 布局打架。 */
+.mail-block[hidden], .mail-adv[hidden] { display: none !important; }
+.mail-block {
+  margin: 4px 0 14px; padding: 14px 16px; border-radius: 10px;
+  background: var(--bg-soft); border: 1px solid var(--border);
+}
+.mail-block .hint:last-child { margin-bottom: 0; }
+.mail-adv { margin: 4px 0 14px; }
 .danger-zone { margin: 28px 0 40px; }
 
 /* ============ 表格 ============ */
