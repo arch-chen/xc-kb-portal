@@ -198,6 +198,44 @@ try {
     row('原始行', '读取失败：' . $e->getMessage(), 'bad');
 }
 
+/* ================= 4b. 默认值顶替检查（最容易被当成「保存无效」） ================= */
+/**
+ * site_load() 对空值会填默认值：site_name 空 → 回落 config 的 app.name；
+ * site_icp_url 空 → 回落工信部链接。
+ * 于是「清空某项 → 保存 → 刷新后又冒出个值」看上去百分百像保存失败，
+ * 但库里其实老老实实存了空串 —— 2.6.4 的写回读校验也抓不到，因为写是成功的，
+ * 是**读**的时候被默认值顶掉了。这一节把「库里存的」和「页面上会显示的」摆在一起。
+ */
+try {
+    $defaults = [
+        'site_name'    => 'config 里的 app.name（或「XC知识库系统」）',
+        'site_icp_url' => 'https://beian.miit.gov.cn/',
+    ];
+    $masks = [];
+    foreach ($defaults as $k => $why) {
+        $raw = setting_get($k, null);
+        $shown = (string)($info[str_replace('site_', '', $k)] ?? '');
+        $rawS = $raw === null ? '（没有这一行）' : (string)$raw;
+        if ($rawS === '' && $shown !== '') {
+            $masks[] = $k . ' 库里是空的，页面显示「' . $shown . '」（默认值：' . $why . '）';
+        }
+    }
+    // 图片类：库里记着文件名、磁盘上没这个文件 → site_brand_src() 返回空、回落内置图标
+    foreach (['logo', 'favicon'] as $slot) {
+        $v = (string)($info[$slot] ?? '');
+        if ($v !== '' && site_brand_is_file($v) && !is_file(site_brand_dir() . '/' . $v)) {
+            $masks[] = 'site_' . $slot . ' 记着「' . $v . '」，但 storage/branding/ 里没这个文件 → 页面回落内置图标';
+        }
+    }
+    row('被默认值顶掉的项', $masks
+        ? implode('<br>', array_map(fn($s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8'), $masks))
+            . '<br><b>这些项「清空后保存」会看起来像没保存成功，其实库里已经是空的了 —— '
+            . '不是 bug，是读取时的默认值兜底。</b>'
+        : '（无）', $masks ? 'warn' : '');
+} catch (Throwable $e) {
+    row('默认值检查', '失败：' . $e->getMessage(), 'bad');
+}
+
 /* ================= 5. 有没有第二份 config / 多个库文件 ================= */
 $cfgs = glob($root . '/config*.php') ?: [];
 row('config 文件', implode('、', array_map('basename', $cfgs)));
@@ -267,7 +305,16 @@ try {
 /* ================= 7. PHP 上传限制（表单是 multipart，超限会导致 $_POST 全空） ================= */
 row('post_max_size', (string)ini_get('post_max_size'));
 row('upload_max_filesize', (string)ini_get('upload_max_filesize'));
-row('session 保存路径可写', is_writable((string)session_save_path()) ? '是' : '否（' . session_save_path() . '）');
+/**
+ * session_save_path() 返回空串表示「用系统默认临时目录」，完全正常。
+ * 以前直接 is_writable('') 判成 false，于是每个站都飘一条红 ——
+ * 常年红着的告警等于没有告警，真出问题时反而没人信。
+ */
+$sessPath = (string)session_save_path();
+row('session 保存路径', $sessPath === ''
+    ? '（空 = 用系统默认临时目录 ' . sys_get_temp_dir() . '）'
+    : $sessPath . (is_writable($sessPath) ? ' · 可写' : ' · ⚠ 不可写'),
+    ($sessPath !== '' && !is_writable($sessPath)) ? 'bad' : '');
 
 /* ================= 8. 多节点 / 反代 / 多目录线索 ================= */
 row('本机 hostname', (string)@gethostname());
@@ -308,6 +355,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 td{padding:8px 10px;border-bottom:1px solid #f1f1f3;vertical-align:top}
 td:first-child{width:250px;color:#52525b;font-weight:600}
 td.bad{color:#b91c1c;font-weight:600;background:#fef2f2}
+td.warn{color:#92400e;background:#fffbeb}
 code{background:#f4f4f5;padding:1px 5px;border-radius:4px;font-size:12px}
 .warn{margin-top:18px;padding:14px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:13px;color:#92400e}
 .next{margin-top:16px;padding:16px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px}
@@ -318,7 +366,7 @@ code{background:#f4f4f5;padding:1px 5px;border-radius:4px;font-size:12px}
 <table>
 <?php foreach ($out as [$k, $v, $cls]): ?>
   <tr><td><?= htmlspecialchars($k, ENT_QUOTES, 'UTF-8') ?></td>
-      <td class="<?= $cls === 'bad' ? 'bad' : '' ?>"><?= $v ?></td></tr>
+      <td class="<?= htmlspecialchars($cls, ENT_QUOTES, 'UTF-8') ?>"><?= $v ?></td></tr>
 <?php endforeach; ?>
 </table>
 
