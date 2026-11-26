@@ -191,6 +191,64 @@ function is_admin_user(int $userId): bool
 }
 
 /**
+ * 谁能改这个分组的名字 / 说明（2.6.5 抽出来，供页面与侧栏 AJAX 共用）。
+ *
+ *   - 私有分组（owner_id>0）：只有归属人本人。前台只填后半截，前缀昵称自动维护。
+ *   - 共享分组（owner_id=0）：管理员。
+ *
+ * 刻意不给「有写权限的成员」：写权限是「能往里加内容」，不等于能改整个库的名字，
+ * 那是结构性变更。
+ *
+ * 为什么抽成一个函数：2.6.4 修这个问题时，判定逻辑同时存在于 ctrl_group() 和
+ * 侧栏 AJAX 两处，各写一遍必然有一天不同步——2.3.0 的 group_perm()/my_groups()
+ * 就是这么埋下「点得进去但侧栏看不见」那个坑的。
+ */
+function can_rename_group(int $userId, int $groupId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+    $owner = group_owner_id($groupId);
+    if ($owner > 0) {
+        return $owner === $userId;
+    }
+    // 共享分组：这个人本身是管理员，或当前请求处在后台上下文里
+    return is_admin_user($userId) || perm_root(current_user());
+}
+
+/**
+ * 分组改名/改说明的落库逻辑（页面表单与侧栏 AJAX 共用）。
+ * 返回 ['ok'=>bool, 'name'=>最终完整名称, 'error'=>错误文案]。
+ *
+ * 名称规则集中在 identity.php：私有分组完整名称永远是「昵称 · 自定义名」，
+ * 用户只填后半截；共享分组直接用填的。
+ */
+function group_rename(int $groupId, string $nameIn, ?string $descIn = null): array
+{
+    $g = group_by_id($groupId);
+    if (!$g) {
+        return ['ok' => false, 'name' => '', 'error' => '分组不存在'];
+    }
+    $owner = (int)$g['owner_id'];
+    $nameIn = nick_clean($nameIn);
+    if ($nameIn === '') {
+        return ['ok' => false, 'name' => (string)$g['name'], 'error' => '分组名称不能为空'];
+    }
+    if ($owner > 0) {
+        $nick = group_owner_nick($g) ?: '用户' . $owner;
+        $full = nick_group_name($nick, group_base_of($nameIn, $nick));
+    } else {
+        $full = mb_substr($nameIn, 0, 120, 'UTF-8');
+    }
+    $data = ['name' => $full];
+    if ($descIn !== null) {
+        $data['description'] = mb_substr($descIn, 0, 480, 'UTF-8');
+    }
+    update_row('groups', $groupId, $data);
+    return ['ok' => true, 'name' => $full, 'error' => ''];
+}
+
+/**
  * 用户可见分组（读权限）。
  * 前台口径：自己建的 + 别人授权的。管理员在前台也是这个口径（全站分组走管理后台）。
  * 后台口径（admin_ctx 已打标）：全部分组。

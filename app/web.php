@@ -523,18 +523,20 @@ function ctrl_group(): void
     $owner = (int)$g['owner_id'];
     $ownerNick = $owner > 0 ? (group_owner_nick($g) ?: '用户' . $owner) : '';
     /**
-     * 谁能改这个分组的名字（2.6.4 修）：
-     *   - 私有分组（owner_id>0）：只有归属人本人，前台只填后半截，前缀昵称自动维护。
-     *   - 共享分组（owner_id=0）：以前这里恒为 false，导致管理员在前台打开共享分组时
-     *     连「分组设置」这张卡片都不渲染，只能绕到后台「分组管理」去改 —— 用户以为不能改名。
-     *     现在放开给管理员。刻意不给「有写权限的成员」：写权限是「能往里加内容」，
-     *     不等于能改整个库的名字，那是结构性变更。
+     * 谁能改这个分组的名字：判定收在 perm.php 的 can_rename_group()。
+     * 2.6.5 起侧栏的「⋯ → 重命名」也走同一份判定，两处不再各写一套
+     * （2.3.0 的 group_perm()/my_groups() 就是各写一套，最后出现
+     * 「点得进去但侧栏看不见」的坑）。
      */
-    $canManage = $owner > 0
-        ? $owner === (int)$u['id']
-        : is_admin($u);
+    $canManage = can_rename_group((int)$u['id'], (int)$g['id']);
 
-    // 改名 / 改说明：归属人本人（管理员在自己后台里改，不走这里）
+    /**
+     * 改名 / 改说明。
+     *
+     * 2.6.5 起改名主入口挪到左侧栏的「⋯」（?r=group_rename），这里只剩「说明」，
+     * 所以用 action 字段区分：没有 action 的是老页面残留的提交，按改名处理（兼容），
+     * action=desc 的只更新说明，不碰名称。
+     */
     if (is_post()) {
         csrf_check();
         if (!$canManage) {
@@ -543,23 +545,25 @@ function ctrl_group(): void
                 : '只有管理员可以改共享分组的名称', 'err');
             redirect(u('g', ['slug' => $g['slug']]));
         }
+        if (post('action') === 'desc') {
+            update_row('groups', (int)$g['id'], [
+                'description' => mb_substr(post('description'), 0, 480, 'UTF-8'),
+            ]);
+            flash('说明已保存');
+            redirect(u('g', ['slug' => $g['slug']]));
+        }
         $nameIn = nick_clean(post('name'));
         $isDefaultSpace = post('default_space') === '1';
         if ($nameIn === '' && !($owner > 0 && $isDefaultSpace)) {
             flash('分组名称不能为空', 'err');
         } else {
-            if ($owner > 0) {
-                // 私有分组：完整名称永远是「昵称 · 自定义名」，用户只填后半截
-                $full = nick_group_name($ownerNick, group_base_of($nameIn, $ownerNick));
+            $r = group_rename((int)$g['id'], $nameIn, post('description'));
+            if ($r['ok']) {
+                audit('rename_group', 'id=' . $g['id'] . ' ' . $r['name']);
+                flash('分组名称已更新为「' . $r['name'] . '」');
             } else {
-                $full = mb_substr($nameIn, 0, 120, 'UTF-8');
+                flash($r['error'], 'err');
             }
-            update_row('groups', (int)$g['id'], [
-                'name'        => $full,
-                'description' => mb_substr(post('description'), 0, 480, 'UTF-8'),
-            ]);
-            audit('rename_group', 'id=' . $g['id'] . ' ' . $full);
-            flash('分组名称已更新为「' . $full . '」');
         }
         redirect(u('g', ['slug' => $g['slug']]));
     }
@@ -1603,6 +1607,66 @@ function ctrl_group_new(): void
         }
     }
     view('group_new', ['title' => '新建分组']);
+}
+
+/**
+ * 侧栏「⋯ → 重命名」的 AJAX 端点（2.6.5）。
+ *
+ * 为什么单独开一个端点而不是复用 ?r=g 的表单提交：
+ * 侧栏在每个页面都在，用户在任意页面（首页 / 搜索 / 条目页）都能就地把分组改名。
+ * 走表单提交会整页跳转到分组页并丢当前上下文，体验上像「点了个链接」而不是「改了个名字」。
+ *
+ * 与页面表单共用 can_rename_group() + group_rename()，判定与落库逻辑只有一份。
+ */
+function ctrl_group_rename(): void
+{
+    if (!is_post()) {
+        json_out(['ok' => false, 'error' => ['message' => '只接受 POST']], 405);
+    }
+    // AJAX 端点不能用 require_login()（会 302 出一段 HTML 给 fetch）
+    $u = current_user();
+    if (!$u) {
+        json_out(['ok' => false, 'error' => ['code' => 'forbidden', 'message' => '登录已过期，请重新登录']], 401);
+    }
+    csrf_check();
+
+    $id = (int)post('id', '0');
+    if ($id <= 0) {
+        json_out(['ok' => false, 'error' => ['message' => '缺少分组 id']], 400);
+    }
+    $g = group_by_id($id);
+    if (!$g) {
+        json_out(['ok' => false, 'error' => ['code' => 'not_found', 'message' => '分组不存在']], 404);
+    }
+    $owner = (int)$g['owner_id'];
+    if (!can_rename_group((int)$u['id'], $id)) {
+        json_out([
+            'ok' => false,
+            'error' => [
+                'code' => 'forbidden',
+                'message' => $owner > 0
+                    ? '只有这个分组的创建者本人可以改名'
+                    : '只有管理员可以改共享分组的名称',
+            ],
+        ], 403);
+    }
+
+    $nameIn = nick_clean(post('name'));
+    if ($nameIn === '') {
+        json_out(['ok' => false, 'error' => ['message' => '分组名称不能为空']], 400);
+    }
+    $r = group_rename($id, $nameIn);
+    if (!$r['ok']) {
+        json_out(['ok' => false, 'error' => ['message' => $r['error']]], 400);
+    }
+    audit('rename_group', 'id=' . $id . ' ' . $r['name']);
+    json_out(['ok' => true, 'data' => [
+        'id'   => $id,
+        'name' => $r['name'],
+        // 私有分组带昵称前缀，前端把前缀单独显示，输入框里只放后半截
+        'base' => $owner > 0 ? group_base_of($r['name'], group_owner_nick($g)) : $r['name'],
+        'prefix' => $owner > 0 ? (group_owner_nick($g) . GROUP_SEP) : '',
+    ]]);
 }
 
 /* ================= 文件存储（1.7.0） ================= */

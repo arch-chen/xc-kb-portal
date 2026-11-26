@@ -151,6 +151,41 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 22px 0; }
   background: var(--bg-soft); color: var(--muted); line-height: 16px;
 }
 .side-item .dot.user { background: var(--accent); opacity: .75; }
+
+/* ============ 侧栏分组的「⋯」重命名（2.6.5） ============
+ * 名字就在侧栏里改，不再需要滚到页面底部的「分组设置」卡片。
+ * 「⋯」平时隐藏（opacity 0 而不是 display:none——后者会让 hover 判定抖动），
+ * 鼠标移到这一行或键盘聚焦时出现；触屏没有 hover，靠 :focus-within 兜底。
+ */
+.side-group-row { position: relative; display: flex; align-items: center; gap: 2px; min-width: 0; }
+.side-group-row .side-item { flex: 1 1 auto; min-width: 0; }
+.side-group-more {
+  flex: 0 0 22px; width: 22px; height: 22px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 6px; background: transparent;
+  color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1;
+  opacity: 0; transition: opacity .12s, background .12s, color .12s;
+}
+.side-group-row:hover .side-group-more,
+.side-group-row:focus-within .side-group-more,
+.side-group-more[aria-expanded="true"] { opacity: 1; }
+.side-group-more:hover { background: var(--bg-soft); color: var(--text); }
+.side-group-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; opacity: 1; }
+/* 就地编辑：输入框直接顶替这一行，前缀「昵称 ·」保持可见 */
+.side-group-edit {
+  display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0;
+  padding: 2px 4px; border: 1px solid var(--accent); border-radius: 8px; background: var(--panel);
+}
+.side-group-edit .side-group-prefix {
+  font-size: 13px; color: var(--muted); white-space: nowrap; flex: 0 0 auto;
+}
+.side-group-edit input {
+  flex: 1 1 auto; min-width: 0; font: inherit; font-size: 13.5px;
+  color: var(--text); background: transparent; border: 0; outline: none; padding: 3px 2px;
+}
+.side-group-err {
+  font-size: 12px; color: #e05252; padding: 3px 10px 5px;
+}
 .side-foot { margin-top: auto; border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 2px; }
 .logout-form { margin: 0; }
 

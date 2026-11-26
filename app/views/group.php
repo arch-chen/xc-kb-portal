@@ -63,32 +63,21 @@
   <h2 class="panel-title">分组设置</h2>
   <form method="post" action="<?= e(u('g', ['slug' => $group['slug']])) ?>" class="form">
     <?= csrf_field() ?>
-    <?php if ($isDefault): ?><input type="hidden" name="default_space" value="1"><?php endif; ?>
-    <label>分组名称
-      <?php if ($ownerNick !== ''): ?>
-        <div class="name-prefix">
-          <span class="name-prefix-tag"><?= e($ownerNick) ?> ·</span>
-          <input type="text" name="name" maxlength="60" value="<?= e($baseName) ?>"
-                 placeholder="留空 = 默认空间「<?= e($ownerNick) ?> 的空间」">
-        </div>
-      <?php else: ?>
-        <input type="text" name="name" maxlength="120" value="<?= e($baseName) ?>" required>
-      <?php endif; ?>
-    </label>
+    <input type="hidden" name="action" value="desc">
     <label>一句话说明（可选）
       <input type="text" name="description" maxlength="120" value="<?= e($group['description']) ?>">
     </label>
     <div class="hint">
+      改名请到左侧栏：把鼠标移到这个分组的名字上，点右边的「⋯」就能直接改。
       <?php if ($ownerNick !== ''): ?>
-        私有分组的完整名称是「昵称 · 你填的名字」，前面的昵称会跟着账户昵称自动更新。
+        完整名称是「<?= e($ownerNick) ?> · 你填的名字」，前面的昵称会跟着账户昵称自动更新。
         <?php if ($isDefault): ?>留空则保持默认空间「<?= e($ownerNick) ?> 的空间」。<?php endif; ?>
       <?php else: ?>
         这是共享分组（全站共用），改名只影响显示名称，不影响里面的内容与已发出的 API Key。
-        也可以到「管理后台 → 分组管理」里批量改，还能顺带调排序与说明。
       <?php endif; ?>
     </div>
     <div class="form-actions">
-      <button class="btn primary" type="submit">保存</button>
+      <button class="btn primary" type="submit">保存说明</button>
       <a class="btn" href="<?= e(u('account')) ?>">改我的昵称</a>
     </div>
   </form>

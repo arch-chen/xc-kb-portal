@@ -36,6 +36,7 @@ $routes = [
     'docs'         => 'ctrl_docs',
     'key_reveal'   => 'ctrl_key_reveal',
     'group_new'    => 'ctrl_group_new',
+    'group_rename' => 'ctrl_group_rename',
     'entry_edit'   => 'ctrl_entry_edit',
     'admin'        => 'ctrl_admin',
     'admin_users'  => 'ctrl_admin_users',

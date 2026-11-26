@@ -2,11 +2,22 @@
 /** @var string $content */
 $u = current_user();
 $navGroups = $u ? my_groups((int)$u['id']) : [];
-$activeGroup = get_q('g', '');
 $route = get_q('r');
 $f = flash();
 $section = $u ? nav_section($route) : '';
 $isAdmin = $u ? is_admin($u) : false;
+// 当前分组：分组页地址是 ?r=g&slug=xxx。侧栏「⋯」改名成功后要把主区标题一起改掉，
+// 所以这里把当前分组的 id 交给前端（body 的 data-cur-group-id）。
+$curSlug = $route === 'g' ? (string)get_q('slug', '') : '';
+$curGroupId = 0;
+if ($curSlug !== '') {
+    foreach ($navGroups as $ng) {
+        if ((string)$ng['slug'] === $curSlug) {
+            $curGroupId = (int)$ng['id'];
+            break;
+        }
+    }
+}
 // 左栏常驻两块：「我的分组」+「AI 工作台（对话列表 / 新对话）」，所有页面都在。
 // 会话侧栏由 nav_agent_side() 统一渲染，视图不再各自塞 side_panel。
 // 主区内容仍按路由各自渲染，首页 / 分组页 / AI 工作台依旧是独立页面。
@@ -28,7 +39,7 @@ $isAdmin = $u ? is_admin($u) : false;
 })();
 </script>
 </head>
-<body>
+<body<?= $curGroupId > 0 ? ' data-cur-group-id="' . $curGroupId . '"' : '' ?>>
 <div class="shell">
   <aside class="sidebar" id="sidebar">
     <a class="brand" href="<?= e(u()) ?>">
@@ -53,11 +64,27 @@ $isAdmin = $u ? is_admin($u) : false;
           <div class="side-empty"><?= $isAdmin ? '你还没有自己的分组；可到「管理后台 → 分组」里建，或让别人授权给你' : '还没有被授权的分组' ?></div>
         <?php endif; ?>
         <?php foreach ($sideMine as $g): ?>
-          <a class="side-item <?= (string)$g['slug'] === $activeGroup ? 'active' : '' ?>"
-             href="<?= e(u('g', ['slug' => $g['slug']])) ?>">
-            <span class="dot"></span>
-            <span class="side-item-text"><?= e($g['name']) ?></span>
-          </a>
+          <?php
+          // 「⋯」只在有权限改名时出现：私有分组给归属人，共享分组给管理员。
+          // 判定与后端 ctrl_group_rename 同一份（can_rename_group），不会出现
+          // 「按钮点得到但服务端拒绝」。
+          $canRename = $u ? can_rename_group((int)$u['id'], (int)$g['id']) : false;
+          $gPrefix = (int)$g['owner_id'] > 0 ? (group_owner_nick($g) . GROUP_SEP) : '';
+          ?>
+          <div class="side-group-row" data-id="<?= (int)$g['id'] ?>"
+               data-slug="<?= e((string)$g['slug']) ?>"
+               data-name="<?= e((string)$g['name']) ?>"
+               data-prefix="<?= e($gPrefix) ?>">
+            <a class="side-item <?= (string)$g['slug'] === $curSlug ? 'active' : '' ?>"
+               href="<?= e(u('g', ['slug' => $g['slug']])) ?>">
+              <span class="dot"></span>
+              <span class="side-item-text"><?= e($g['name']) ?></span>
+            </a>
+            <?php if ($canRename): ?>
+              <button type="button" class="side-group-more" aria-label="分组操作"
+                      title="重命名" data-id="<?= (int)$g['id'] ?>">⋯</button>
+            <?php endif; ?>
+          </div>
         <?php endforeach; ?>
       </nav>
     </div>
@@ -104,6 +131,7 @@ $isAdmin = $u ? is_admin($u) : false;
   </main>
 </div>
 <script src="<?= e(asset('app.js')) ?>?v=<?= e(asset_ver('app.js')) ?>"></script>
+<script src="<?= e(asset('group-rename.js')) ?>?v=<?= e(asset_ver('group-rename.js')) ?>"></script>
 <script src="<?= e(asset('ai-guide.js')) ?>?v=<?= e(asset_ver('ai-guide.js')) ?>"></script>
 <script src="<?= e(asset('agent-side.js')) ?>?v=<?= e(asset_ver('agent-side.js')) ?>"></script>
 </body>
